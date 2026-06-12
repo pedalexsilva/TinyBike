@@ -9,8 +9,8 @@ import { RIVALS, type RivalDef } from './rivals';
 import { dirFromLatLon } from '../world/zones';
 import type { Planet } from '../world/planet';
 
-const NOTICE_RADIUS = 16; // "!" balloon appears
-const CHALLENGE_RADIUS = 5.5; // panel opens
+const NOTICE_RADIUS = 20; // "!" balloon appears
+const CHALLENGE_RADIUS = 7.5; // panel opens (reachable from the road edge)
 const Y = new THREE.Vector3(0, 1, 0);
 
 const _v = new THREE.Vector3();
@@ -56,18 +56,22 @@ export class RivalNPC {
     this.time = Math.random() * 10;
     this.drinkTimer = 4 + Math.random() * 5;
 
-    // Spawn in-zone, nudged off the road.
-    let dir = dirFromLatLon(def.idleLatLon[0], def.idleLatLon[1]);
-    let guard = 0;
-    // Spiral outward (8 directions, growing step) until clear of the road.
-    while (planet.isNearRoad(dir, 2.0) && guard++ < 24) {
-      const ang = (guard % 8) * (Math.PI / 4);
-      const step = 1.4 * (1 + Math.floor(guard / 8));
-      dir = dirFromLatLon(
-        def.idleLatLon[0] + Math.sin(ang) * step,
-        def.idleLatLon[1] + Math.cos(ang) * step,
-      );
-    }
+    // Spawn at a FIXED distance (~4.5m) beside the road so the player can
+    // always trigger the challenge while riding past — critical on mobile.
+    const roadSide = 4.5; // meters from road center
+    const idleDir = dirFromLatLon(def.idleLatLon[0], def.idleLatLon[1]);
+    const s = planet.road.samples[planet.road.closestIndex(idleDir)];
+    // Perpendicular direction from the road toward the idle spot (or an
+    // arbitrary side if the spot sits exactly on the road).
+    const away = idleDir.clone().addScaledVector(s.dir, -idleDir.dot(s.dir));
+    if (away.lengthSq() < 1e-6) away.crossVectors(s.tangent, s.dir);
+    away.normalize();
+    const ang = roadSide / planet.radius;
+    const dir = s.dir
+      .clone()
+      .multiplyScalar(Math.cos(ang))
+      .addScaledVector(away, Math.sin(ang))
+      .normalize();
     this.position.copy(dir).multiplyScalar(planet.radius + planet.heightAt(dir));
     this.model.group.position.copy(this.position);
     this.model.group.quaternion.setFromUnitVectors(Y, dir);

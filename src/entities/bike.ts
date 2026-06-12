@@ -15,8 +15,8 @@ export interface BikeAppearance {
   skin: number;
   frame: number;
   helmet: number;
-  glasses: number;
-  wheels: number;
+  glassesColor: number;
+  rimColor: number;
   /** Caricature dials. */
   headScale: number;
   torsoWidth: number;
@@ -29,8 +29,8 @@ const PLAYER_LOOK: BikeAppearance = {
   skin: 0xffc9a3,
   frame: 0xe84545,
   helmet: 0xffffff,
-  glasses: 0x1c1f2e,
-  wheels: 0xcccccc,
+  glassesColor: 0x1c1f2e,
+  rimColor: 0xcccccc,
   headScale: 1,
   torsoWidth: 1,
   smile: false,
@@ -65,10 +65,10 @@ export class BikeModel {
     const R = CONFIG.bike.wheelRadius;
 
     // --- Wheels ---
-    const tireGeo = new THREE.TorusGeometry(R, 0.09, 8, 20);
-    const spokeGeo = new THREE.BoxGeometry(0.02, R * 1.9, 0.02);
+    const tireGeo = new THREE.TorusGeometry(R, 0.048, 8, 24);
+    const spokeGeo = new THREE.BoxGeometry(0.018, R * 1.9, 0.018);
     const tireMat = toonMat(DARK);
-    const rimMat = toonMat(look.wheels);
+    const rimMat = toonMat(look.rimColor);
     for (const z of [R * 1.55, -R * 1.55]) {
       const wheel = new THREE.Group();
       const tire = new THREE.Mesh(tireGeo, tireMat);
@@ -87,10 +87,10 @@ export class BikeModel {
 
     // --- Frame (stylized) ---
     const frameMat = toonMat(look.frame);
-    const tube = (from: THREE.Vector3, to: THREE.Vector3, r = 0.06): THREE.Mesh => {
+    const tube = (from: THREE.Vector3, to: THREE.Vector3, r = 0.05): THREE.Mesh => {
       const dir = new THREE.Vector3().subVectors(to, from);
       const len = dir.length();
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), frameMat);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, len, 6), frameMat);
       mesh.position.copy(from).addScaledVector(dir, 0.5);
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
       this.leanPivot.add(mesh);
@@ -103,32 +103,46 @@ export class BikeModel {
     const seatTop = new THREE.Vector3(0, R * 2.5, -R * 0.7);
     const headTop = new THREE.Vector3(0, R * 2.45, R * 1.15);
 
-    tube(rearHub, bb);
-    tube(bb, seatTop, 0.07);
-    tube(bb, headTop, 0.07);
-    tube(seatTop, headTop, 0.06);
-    tube(rearHub, seatTop, 0.05);
-    tube(frontHub, headTop, 0.06);
+    tube(rearHub, bb, 0.045);
+    tube(bb, seatTop, 0.06);
+    tube(bb, headTop, 0.06);
+    tube(seatTop, headTop, 0.05);
+    tube(rearHub, seatTop, 0.04);
+    tube(frontHub, headTop, 0.05);
 
-    // Handlebar
+    // Handlebar (Drop bar)
     const barMat = toonMat(DARK);
-    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), barMat);
+    const barWidth = 0.52;
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, barWidth, 6), barMat);
     bar.position.copy(headTop);
     bar.rotation.z = Math.PI / 2;
     this.leanPivot.add(bar);
 
+    // Drop curves on both sides
+    const dropRadius = 0.12;
+    const dropTube = 0.026;
+    const dropGeo = new THREE.TorusGeometry(dropRadius, dropTube, 6, 8, Math.PI * 0.85);
+    for (const side of [1, -1]) {
+      const drop = new THREE.Mesh(dropGeo, barMat);
+      drop.position.set(side * (barWidth / 2), headTop.y - dropRadius * 0.5, headTop.z + dropRadius * 0.4);
+      drop.rotation.x = Math.PI * 0.35;
+      drop.rotation.y = side * Math.PI / 2;
+      drop.rotation.z = 0;
+      this.leanPivot.add(drop);
+    }
+
     // Saddle
-    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.5), barMat);
-    saddle.position.copy(seatTop).add(new THREE.Vector3(0, 0.06, 0));
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.07, 0.45), barMat);
+    saddle.position.copy(seatTop).add(new THREE.Vector3(0, 0.05, 0));
     this.leanPivot.add(saddle);
 
     // --- Crank + pedals ---
     this.crank.position.copy(bb);
     const crankMat = toonMat(0x888888);
     for (const side of [1, -1]) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.05), crankMat);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.42, 0.04), crankMat);
       arm.position.set(side * 0.14, side * 0.105, 0);
-      const pedal = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.22), barMat);
+      const pedal = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.18), barMat);
       pedal.position.set(side * 0.17, side * 0.21, 0);
       this.crank.add(arm, pedal);
     }
@@ -139,21 +153,22 @@ export class BikeModel {
     riderRoot.position.copy(seatTop);
     this.leanPivot.add(riderRoot);
 
-    this.torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.5, 4, 10), toonMat(look.jersey));
-    this.torso.position.set(0, 0.42, 0.22);
-    this.torso.rotation.x = 0.85;
+    // Leaning forward aerodynamically for the road bike
+    this.torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.48, 4, 10), toonMat(look.jersey));
+    this.torso.position.set(0, 0.38, 0.26);
+    this.torso.rotation.x = 1.05;
     this.torso.scale.set(look.torsoWidth, 1, look.torsoWidth);
     addOutline(this.torso, 0.05);
     riderRoot.add(this.torso);
 
-    this.head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 14), toonMat(look.skin));
-    this.head.position.set(0, 0.92, 0.62);
+    this.head = new THREE.Mesh(new THREE.SphereGeometry(0.40, 16, 14), toonMat(look.skin));
+    this.head.position.set(0, 0.84, 0.68);
     this.head.scale.setScalar(look.headScale);
     addOutline(this.head, 0.05);
     riderRoot.add(this.head);
 
     const helmet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.46, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      new THREE.SphereGeometry(0.44, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
       toonMat(look.helmet),
     );
     helmet.position.set(0, 0.06 / look.headScale + 0.0, -0.04 / look.headScale);
@@ -161,17 +176,17 @@ export class BikeModel {
     addOutline(helmet, 0.05);
     this.head.add(helmet); // scales with the head
 
-    const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.13, 0.1), toonMat(look.glasses));
-    glasses.position.set(0, 0.04, 0.36);
+    const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.13, 0.1), toonMat(look.glassesColor));
+    glasses.position.set(0, 0.04, 0.34);
     this.head.add(glasses);
 
     if (look.smile) {
       // The enormous grin: a white crescent on the lower face.
       const grin = new THREE.Mesh(
-        new THREE.TorusGeometry(0.16, 0.05, 6, 10, Math.PI),
+        new THREE.TorusGeometry(0.15, 0.05, 6, 10, Math.PI),
         toonMat(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.15 }),
       );
-      grin.position.set(0, -0.14, 0.36);
+      grin.position.set(0, -0.14, 0.34);
       grin.rotation.x = Math.PI; // smile up
       this.head.add(grin);
     }
@@ -181,16 +196,16 @@ export class BikeModel {
       new THREE.CylinderGeometry(0.05, 0.05, 0.2, 7),
       toonMat(0x53b7e8),
     );
-    this.bidon.position.set(0.2, -0.1, 0.42);
+    this.bidon.position.set(0.2, -0.1, 0.40);
     this.bidon.visible = false;
     this.head.add(this.bidon);
 
     const armMat = toonMat(look.jersey);
     for (const side of [1, -1]) {
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.62, 3, 8), armMat);
-      arm.position.set(side * 0.3 * look.torsoWidth, 0.55, 0.62);
-      arm.rotation.x = 1.15;
-      arm.rotation.z = side * -0.18;
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.60, 3, 8), armMat);
+      arm.position.set(side * 0.28 * look.torsoWidth, 0.48, 0.66);
+      arm.rotation.x = 1.25;
+      arm.rotation.z = side * -0.15;
       riderRoot.add(arm);
     }
 
@@ -230,7 +245,7 @@ export class BikeModel {
 
     // Lean into curves (roll proportional to steer * speed).
     const speedRatio = speed / CONFIG.player.maxSpeed;
-    const targetLean = -smoothSteer * B.leanAngle * speedRatio;
+    const targetLean = smoothSteer * B.leanAngle * speedRatio;
     this.lean += (targetLean - this.lean) * (1 - Math.exp(-8 * dt));
 
     // Wheelie kick on boost start, decaying.

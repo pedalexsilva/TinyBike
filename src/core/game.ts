@@ -14,7 +14,7 @@ import { scatterProps } from '../world/props';
 import { TourProps } from '../world/tour-props';
 import { Musettes } from '../world/collectibles';
 import { Dressing } from '../world/dressing';
-import { ZONES, angularDistance } from '../world/zones';
+import { angularDistance } from '../world/zones';
 import { Player } from '../entities/player';
 import { BikeModel } from '../entities/bike';
 import { RivalsSystem } from '../entities/rival-npc';
@@ -59,6 +59,7 @@ export class Game {
   /** Re-armed when the player leaves the challenge radius. */
   private challengeArmed = true;
   private paused = true; // start paused for title screen
+  private garageOrbit = 0;
   private readonly trail = new TrailFX();
   private readonly dust = new DustFX();
   private readonly speedLines: SpeedLinesFX;
@@ -87,13 +88,13 @@ export class Game {
     root.appendChild(this.renderer.domElement);
 
     // --- Lights (toon-friendly: strong key + colored hemisphere fill) ---
-    const sun = new THREE.DirectionalLight(0xfff4d6, 2.2);
+    const sun = new THREE.DirectionalLight(0xffe8bd, 2.8);
     sun.position.copy(SUN_DIR).multiplyScalar(200);
     const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x4a7a3a, 0.85);
     this.scene.add(sun, hemi);
 
     // --- World ---
-    this.scene.add(this.planet.mesh, this.planet.roadMesh);
+    this.scene.add(this.planet.mesh, this.planet.roadMesh, this.planet.roadMarkingsMesh);
     this.scene.add(this.sky.group);
     scatterProps(this.scene, this.planet, this.quality);
     this.tourProps = new TourProps(this.planet);
@@ -211,6 +212,9 @@ export class Game {
     };
     this.pauseMenu.onGarage = () => {
       this.paused = true;
+      this.garageOrbit = 0;
+      this.bike.group.visible = false;
+      this.blobShadow.visible = false;
       this.garage.enter(this.player.position, this.player.up);
     };
 
@@ -219,6 +223,9 @@ export class Game {
       this.scene.remove(this.bike.group);
       this.bike = new BikeModel(appearanceFromEquipped());
       this.scene.add(this.bike.group);
+      this.bike.group.visible = true;
+      this.blobShadow.visible = true;
+      this.syncBikeTransform();
     };
 
     const hudGarage = document.getElementById('hud-garage-btn');
@@ -227,6 +234,9 @@ export class Game {
     hudGarage?.addEventListener('click', () => {
       if (!this.paused && this.race.state === 'idle' && !this.garage.isOpen) {
         this.paused = true;
+        this.garageOrbit = 0;
+        this.bike.group.visible = false;
+        this.blobShadow.visible = false;
         this.garage.enter(this.player.position, this.player.up);
       }
     });
@@ -305,14 +315,11 @@ export class Game {
       }
     }
 
-    if (this.garage.isOpen) {
-      this.garage.update(dt);
-    }
-
     // Pavé cobblestone vibration: on the road, inside the pavé zone.
     _playerDir.copy(this.player.position).normalize();
     const onRoad = this.planet.isNearRoad(_playerDir, 1.15);
-    const inPave = angularDistance(_playerDir, ZONES.pave.center) < ZONES.pave.radius;
+    const pave = this.planet.paveZone;
+    const inPave = pave !== null && angularDistance(_playerDir, pave.center) < pave.radius;
     const speedRatio = this.player.speed / CONFIG.player.maxSpeed;
     this.bike.setVibration(onRoad && inPave ? Math.min(1, speedRatio * 1.4) : 0);
 
@@ -352,7 +359,24 @@ export class Game {
     } else if (!this.rivals.inRange && !this.challenge.isOpen()) {
       this.challengeArmed = true;
     }
-    if (this.race.state !== 'cutscene') this.followCam.update(dt, this.player);
+    if (this.garage.isOpen) {
+      // Orbit the podium slowly; the rider rotates on it.
+      this.garage.update(dt);
+      this.garageOrbit += dt * 0.25;
+      const up = this.garage.podiumUp;
+      const e1 = new THREE.Vector3(1, 0, 0);
+      if (Math.abs(up.dot(e1)) > 0.9) e1.set(0, 0, 1);
+      e1.cross(up).normalize();
+      const e2 = new THREE.Vector3().crossVectors(up, e1);
+      this.followCam.camera.position
+        .copy(this.garage.podiumCenter)
+        .addScaledVector(e1, Math.cos(this.garageOrbit) * 5.2)
+        .addScaledVector(e2, Math.sin(this.garageOrbit) * 5.2)
+        .addScaledVector(up, 2.4);
+      this.followCam.camera.up.copy(up);
+      const look = this.garage.podiumCenter.clone().addScaledVector(up, 1.2);
+      this.followCam.camera.lookAt(look);
+    } else if (this.race.state !== 'cutscene') this.followCam.update(dt, this.player);
     this.sky.update(dt, this.followCam.camera.position);
 
     this.hud.update(dt, this.player.speed, this.player.boostCharge, this.player.boosting);

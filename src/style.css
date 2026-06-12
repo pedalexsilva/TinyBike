@@ -24,7 +24,7 @@ body {
 }
 
 #app,
-#app canvas {
+#app > canvas {
   position: fixed;
   inset: 0;
   width: 100%;

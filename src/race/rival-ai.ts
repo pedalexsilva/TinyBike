@@ -184,15 +184,22 @@ export class RivalAI {
     const dir = _v.clone().normalize();
     _side.crossVectors(_t, dir).normalize();
     this.model.group.position.copy(_v).addScaledVector(_side, lateral);
-    _x.crossVectors(dir, _z.copy(_t).negate()).normalize();
+    // +Z = direction of travel (project convention, see spherical.ts).
+    _z.copy(_t);
+    _x.crossVectors(dir, _z).normalize();
     _z.crossVectors(_x, dir).normalize();
     _m.makeBasis(_x, dir, _z);
     this.model.group.quaternion.setFromRotationMatrix(_m);
 
-    // Lean from curvature (tangent change rate).
+    // Lean from curvature: signed turn rate = (prevT × T) · up.
+    const turnSign = Math.sign(
+      this.lastTangent.x * (_t.y * dir.z - _t.z * dir.y) +
+      this.lastTangent.y * (_t.z * dir.x - _t.x * dir.z) +
+      this.lastTangent.z * (_t.x * dir.y - _t.y * dir.x),
+    );
     const turn = this.lastTangent.angleTo(_t) / Math.max(dt, 1e-4);
     this.lastTangent.copy(_t);
-    const lean = THREE.MathUtils.clamp(turn * 0.4, 0, 1) * Math.sign(_t.dot(_side));
+    const lean = THREE.MathUtils.clamp(turn * 0.5, 0, 1) * -turnSign;
     this.smoothLean += (lean - this.smoothLean) * (1 - Math.exp(-6 * dt));
     this.model.update(dt, this.speed, this.smoothLean, false);
 

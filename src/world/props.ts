@@ -4,7 +4,7 @@
  * (sunflowers, poplars, vila) lives in tour-props.ts.
  */
 import * as THREE from 'three';
-import { SNOW_HEIGHT, type Planet } from './planet';
+import type { Planet } from './planet';
 import { toonMat } from '../render/toon';
 import type { QualitySettings } from '../core/quality';
 
@@ -61,19 +61,34 @@ export function scatterProps(
   canopy2Geo.translate(0, 2.6, 0);
 
   const trunks = new THREE.InstancedMesh(trunkGeo, toonMat(0x7a5230), quality.treeCount);
-  const canopies = new THREE.InstancedMesh(canopyGeo, toonMat(0x2e8b46), quality.treeCount);
-  const canopies2 = new THREE.InstancedMesh(canopy2Geo, toonMat(0x37a653), quality.treeCount);
+  const canopies = new THREE.InstancedMesh(canopyGeo, toonMat(0xffffff), quality.treeCount);
+  const canopies2 = new THREE.InstancedMesh(canopy2Geo, toonMat(0xffffff), quality.treeCount);
+
+  const treePalette = [
+    new THREE.Color('#1e4620'), // forest green
+    new THREE.Color('#2e7d32'), // rich emerald
+    new THREE.Color('#4caf50'), // light green
+    new THREE.Color('#d4a373'), // warm terracotta/gold
+    new THREE.Color('#e07a5f'), // soft coral/red
+    new THREE.Color('#f4a261'), // autumn orange
+  ];
 
   let placed = 0;
   let guard = 0;
   while (placed < quality.treeCount && guard++ < quality.treeCount * 40) {
-    if (!randomSurfacePlacement(rand, planet, SNOW_HEIGHT - 1.5)) continue;
+    if (!randomSurfacePlacement(rand, planet, planet.snowHeight - 1.5)) continue;
     const s = 0.8 + rand() * 0.9;
     _scale.set(s, s * (0.9 + rand() * 0.3), s);
     _mat.compose(_pos, _quat, _scale);
     trunks.setMatrixAt(placed, _mat);
     canopies.setMatrixAt(placed, _mat);
     canopies2.setMatrixAt(placed, _mat);
+
+    const col1 = treePalette[Math.floor(rand() * treePalette.length)];
+    const col2 = col1.clone().offsetHSL(0.01, -0.05, 0.08);
+    canopies.setColorAt(placed, col1);
+    canopies2.setColorAt(placed, col2);
+
     placed++;
   }
   trunks.count = canopies.count = canopies2.count = placed;
@@ -110,7 +125,7 @@ export function scatterProps(
   placed = 0;
   guard = 0;
   while (placed < quality.rockCount && guard++ < quality.rockCount * 40) {
-    if (!randomSurfacePlacement(rand, planet, SNOW_HEIGHT + 3)) continue;
+    if (!randomSurfacePlacement(rand, planet, planet.snowHeight + 3)) continue;
     const s = 0.5 + rand() * 1.4;
     _scale.set(s, s * (0.6 + rand() * 0.5), s);
     _mat.compose(_pos, _quat, _scale);
