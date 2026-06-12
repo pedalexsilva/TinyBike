@@ -1,54 +1,115 @@
 # Tiny Peloton 🚴
 
-3D browser cycling game on tiny spherical planets — "Messenger"-style
-(cozy + shareable), with arcade race adrenaline. **Phase 0–1 build** (P01–P05
-of the dev plan): spherical physics, mobile/desktop controls, arcade bike
-feel and the cel-shaded visual pipeline on the Tour test planet.
+A third-person browser arcade cycling game on tiny, cozy spherical planets, styled with saturated cel-shaded visuals. Ride across beautiful landscapes, challenge parodied cycling legends, earn iconic jerseys, and customize your rider in the Garage!
 
-## Commands
+Built with **Vite, TypeScript, Three.js, three-mesh-bvh, Zustand, GSAP, and native Web Audio API**.
+
+---
+
+## 🎮 Game Pillars & Features
+
+1. **Wonder First**: Rich cel-shaded visual pipeline with stylized sky shaders, outlines, and saturated color palettes tailored to each planet.
+2. **Arcade Physics & Controls**: Auto-pedal touch controls (mobile virtual joystick) and keyboard controls (desktop WASD/Arrows) with instant drift, wheelies, and boost sweeps.
+3. **Caricatured Rivals**: Ten parodied professional cycling legends (e.g. Marc Cannondish, Jonas Windgaard, Taddy Pog) with custom looks and personality-driven AIs.
+4. **Data-Driven Progression**: Unlock custom jerseys, helmets, and components in the Garage by defeating rivals. Progress is auto-saved locally.
+5. **Procedural Web Audio**: Real-time sound synthesis (wind, pedaling, boosts, chimes, fanfares, and ambient exploration loops) with zero asset footprints.
+
+---
+
+## 🛠️ Commands
 
 ```bash
+# Install dependencies
 npm install
-npm run dev      # local dev server (use --host to test on your phone)
-npm run build    # type-check + production build (dist/)
-npm run preview  # serve the production build
+
+# Start local development server with HMR
+npm run dev
+
+# Start dev server exposing network IP (for testing on mobile devices)
+npm run dev -- --host
+
+# Type-check + compile production bundle
+npm run build
+
+# Preview locally Compiled production build
+npm run preview
 ```
 
-## Controls
+---
 
-- **Desktop:** WASD / arrows to ride, SPACE or SHIFT to boost.
-- **Mobile:** auto-pedal; drag on the left half to steer (floating joystick);
-  big BOOST button on the right.
+## 📐 Architecture & Math Invariants
 
-Boost fills slowly while pedaling; at 100% press boost for +60% speed,
-FOV kick, speed lines, trail and a little wheelie.
+* **Spherical Physics**: Gravity vectors point directly to the planet center. The player's vertical axis is dynamically snapped and aligned to the local surface normal using Quaternions, avoiding Euler-angle singular poles (Gimbal lock).
+* **Collision Detection**: Collision checks use `three-mesh-bvh` raycasts to snap the player, NPCs, and props to the terrain, facilitating high-performance slopes and switchbacks.
+* **Zero Allocation Game Loop**: To maintain a stable 60 FPS target on mid-range mobile devices, all temporary vectors, quaternions, and matrices are pooled at the module level—preventing Garbage Collection stuttering.
+* **Volume Settings & Saves**: Progression state, cosmetic custom choices, and volumes are managed using Zustand and serialized cleanly to `localStorage` with migration triggers.
 
-## Architecture
+---
+
+## 📁 Directory Structure
 
 ```
 src/
-  core/      game loop, config (tuning panel), input, camera, spherical math, quality tiers, noise
-  world/     procedural planet (icosphere + analytic height fn), sky dome, instanced props
-  entities/  player controller (spherical physics), procedural bike + caricature rider
-  race/      (P09+) race system
-  fx/        trail, dust, speed lines — all pooled, zero alloc in the loop
-  ui/        HTML HUD + touch controls
-  state/     Zustand store; save.ts will own localStorage (P12)
-  render/    toon material + outline helpers
+  ├── audio/      # Web Audio API manager & sound synthesis loops
+  ├── core/       # Game loop, third-person camera, input, quality settings, physics math
+  ├── entities/   # Player physics, procedural bike model, NPC rivals
+  ├── fx/         # Pooled particle FX (dust, tire trails, speed lines)
+  ├── race/       # RaceManager state machine, AI rubber-banding, gate systems, rewards
+  ├── render/     # Cel-shaded toon material, inverted-hull outlines
+  ├── state/      # Zustand store, save/load migrations
+  ├── ui/         # HTML overlay HUD, challenge panels, pause controls, title, garage UI
+  ├── world/      # Planet icosphere generation, instanced props, sky/sol rendering
+  └── main.ts     # Main application bootloader
 ```
 
-Key invariants:
+---
 
-- **Spherical physics:** gravity points at the planet center; the player's
-  "up" is the smoothed surface normal; orientation is quaternion-only
-  (no Euler → no pole flips). Terrain snapping is a BVH raycast, so any
-  relief works, not just perfect spheres.
-- **Tuning:** every gameplay constant lives in `src/core/config.ts`.
-- **Performance:** pooled temp vectors, instanced props, one-draw-call FX,
-  quality tiers for mobile. Target: 60fps on a mid-range phone.
+## 🧭 How to Add New Content (Data-Driven Guide)
 
-## Next (per PLANO-DEV-TINY-PELOTON-V1)
+Tiny Peloton is designed with a highly modular, data-driven architecture. Adding new content requires zero modifications to the core physics or rendering loop.
 
-P06 Tour planet zones & road spline → P07 set dressing & musettes →
-P08 rivals → P09–P11 races & rewards → P12–P13 save & garage →
-P14–P16 Giro/Vuelta/hub → P17–P18 audio, PWA, deploy.
+### How to Add a New Rival
+Open `src/entities/rivals.ts` and append a new `RivalDef` object to the `RIVALS` array:
+
+```typescript
+{
+  id: 'parody-name',
+  name: 'Parody Name',
+  planet: 'tour',           // 'tour' | 'giro' | 'vuelta'
+  zone: 'vila',             // Spawn zone
+  bio: 'A hilarious parody description goes here.',
+  taunt: 'Prepare to taste my dust!',
+  defeatLine: 'Impossible! I was supposed to win...',
+  raceTaunts: { pass: 'Beep beep!', passed: 'Wait, come back!' },
+  raceType: 'CLIMB',        // 'SPRINT' | 'CLIMB' | 'CLASSIC' | 'BOSS'
+  stats: { topSpeed: 14.0, accel: 11.5, boostUse: 0.75 },
+  look: {
+    jersey: 0xff00ff,
+    shorts: 0x111111,
+    helmet: 0xff00ff,
+    skin: 0xffe0bd,
+    frame: 0xff00ff,
+    glasses: 0x1c1f2e,
+    wheels: 0xcccccc,
+    headScale: 1.1,         // Caricature head size scale
+    torsoWidth: 0.9,        // Skinny/heavy body scale
+    smile: true,
+  },
+  idleLatLon: [15, 45],     // Spawn coordinates on the sphere
+}
+```
+
+### How to Add a New Planet
+1. **Extend Planet Data**: Add the new planet identifier to `PlanetId` type in `src/entities/rivals.ts`.
+2. **Implement Terrain & Props**: Customize terrain color bands, heights (domes), and vegetation instancing in `src/world/planet.ts` and `src/world/props.ts` when your new planet is active.
+3. **Configure Rivals**: Define at least 3 standard rivals and 1 BOSS rival bound to the new planet ID.
+
+---
+
+## 🚀 Future Roadmap (V2)
+
+* **Async Ghost Race (Supabase)**: Record compressed physics replays of players' personal best runs and allow racing against ghosts in real-time.
+* **Global Leaderboards**: Secure, anti-cheat validated online leaderboards for each planet segment.
+* **Drafting Mechanic**: Tucking behind a rival's rear wheel reduces drag and accelerates boost bar charging.
+* **Real-time Multiplayer**: WebSockets-driven space lobbies, allowing players to explore planets together and emote in real-time.
+* **Daily Challenges**: Segments generated dynamically from a daily random seed with 24-hour leaderboards.
