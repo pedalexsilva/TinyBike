@@ -24,6 +24,10 @@ export class Hud {
         <div id="vignette"></div>
         <div id="topbar">
           <div id="speed">0<span> km/h</span></div>
+          <div id="hud-actions">
+            <button id="hud-garage-btn" class="hud-btn pointer-events-auto">GARAGE</button>
+            <button id="hud-pause-btn" class="hud-btn pointer-events-auto">⚙</button>
+          </div>
           <div id="fps"></div>
         </div>
         <div id="boost-bar"><div id="boost-fill"></div><span id="boost-label">BOOST</span></div>

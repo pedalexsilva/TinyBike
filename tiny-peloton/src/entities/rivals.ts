@@ -22,6 +22,8 @@ export interface RivalAppearance {
   helmet: number;
   skin: number;
   frame: number;
+  glasses: number;
+  wheels: number;
   /** Caricature dials. */
   headScale: number;
   torsoWidth: number;
@@ -66,6 +68,8 @@ export const RIVALS: RivalDef[] = [
       helmet: 0x2ecc71,
       skin: 0xf0b58a,
       frame: 0x1c1f2e,
+      glasses: 0x1c1f2e,
+      wheels: 0xcccccc,
       headScale: 1.05,
       torsoWidth: 1.2,
       smile: false,
@@ -89,6 +93,8 @@ export const RIVALS: RivalDef[] = [
       helmet: 0xffffff,
       skin: 0xffe4d6, // pale
       frame: 0xe8e8e8,
+      glasses: 0x1c1f2e,
+      wheels: 0xe8e8e8,
       headScale: 0.95,
       torsoWidth: 0.72, // skinny
       smile: false,
@@ -112,6 +118,8 @@ export const RIVALS: RivalDef[] = [
       helmet: 0xe84545,
       skin: 0xf0b58a,
       frame: 0x2b2f44,
+      glasses: 0x1c1f2e,
+      wheels: 0x2b2f44,
       headScale: 1.0,
       torsoWidth: 1.35, // tank
       smile: false,
@@ -135,6 +143,8 @@ export const RIVALS: RivalDef[] = [
       helmet: 0xffd23f,
       skin: 0xf5c89e,
       frame: 0xffd23f,
+      glasses: 0x1c1f2e,
+      wheels: 0xffd23f,
       headScale: 1.18, // big happy head
       torsoWidth: 1.0,
       smile: true, // the enormous grin

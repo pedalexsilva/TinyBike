@@ -28,6 +28,10 @@ import { RaceManager } from '../race/race';
 import type { RivalDef } from '../entities/rivals';
 import { gameStore } from '../state/store';
 import { rewardForWin, bossUnlocked } from '../race/rewards';
+import { TitleScreen, Hints } from '../ui/title';
+import { PauseMenu } from '../ui/pause';
+import { Garage, appearanceFromEquipped } from '../ui/garage';
+import { AudioManager } from '../audio/audio';
 
 const MAX_DELTA = 0.05; // 50ms clamp — tab switches don't teleport the player
 
@@ -44,7 +48,7 @@ export class Game {
   private readonly planet = new Planet();
   private readonly sky = new Sky();
   private readonly player: Player;
-  private readonly bike = new BikeModel();
+  private bike: BikeModel;
   private readonly tourProps: TourProps;
   private readonly musettes: Musettes;
   private readonly dressing: Dressing;
@@ -54,18 +58,25 @@ export class Game {
   private readonly race: RaceManager;
   /** Re-armed when the player leaves the challenge radius. */
   private challengeArmed = true;
-  private paused = false;
+  private paused = true; // start paused for title screen
   private readonly trail = new TrailFX();
   private readonly dust = new DustFX();
   private readonly speedLines: SpeedLinesFX;
   private readonly hud: Hud;
   private readonly blobShadow: THREE.Mesh;
 
+  private readonly garage: Garage;
+  private readonly title: TitleScreen;
+  private readonly hints: Hints;
+  private readonly pauseMenu: PauseMenu;
+  private readonly audio = new AudioManager();
+
   private running = false;
 
   constructor(root: HTMLElement) {
     const state = gameStore.getState();
     this.quality = detectQuality(state.quality === 'auto' ? undefined : state.quality);
+    this.bike = new BikeModel(appearanceFromEquipped());
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -128,8 +139,30 @@ export class Game {
     this.challenge = new ChallengePanel(root);
     this.raceHud = new RaceHud(root);
     this.race = new RaceManager(this.planet, this.scene);
-    this.race.onCountdownTick = (n) => this.raceHud.countdown(n);
-    this.race.onGateMissed = () => this.raceHud.toast('Missed a gate! Back you go.');
+
+    this.garage = new Garage(root, this.scene);
+    this.title = new TitleScreen(root);
+    this.hints = new Hints(root);
+    this.pauseMenu = new PauseMenu(root);
+
+    // Audio triggers
+    this.musettes.onCollect = (pos, up) => {
+      this.player.boostCharge = 1; // musette = instant full boost bar
+      if (this.quality.fxEnabled) this.dust.spawn(pos, up, 10);
+      this.audio.playCollect();
+    };
+
+    this.race.onCountdownTick = (n) => {
+      this.raceHud.countdown(n);
+      this.audio.playCountdown(n);
+    };
+    this.race.onGateMissed = () => {
+      this.raceHud.toast('Missed a gate! Back you go.');
+      this.audio.playMiss();
+    };
+    this.race.onCheckpointPassed = () => {
+      this.audio.playCheckpoint();
+    };
     this.race.onFinished = (result, time, def) => {
       const store = gameStore.getState();
       const best = store.bestTimes[def.id] ?? null;
@@ -139,12 +172,16 @@ export class Game {
         store.recordWin(def.id, time);
         reward = rewardForWin(def.id, winNumber);
         if (reward) store.addItem(reward.id);
+        this.audio.playVictory();
+      } else {
+        this.audio.playDefeat();
       }
       this.raceHud.showResults(result, time, def, best, reward);
     };
     this.raceHud.onContinue = () => {
       this.race.end();
       this.raceHud.hide();
+      this.audio.setState('explore');
       this.paused = false;
       this.challengeArmed = false; // don't instantly re-open the panel
     };
@@ -161,6 +198,64 @@ export class Game {
       this.paused = false;
     };
 
+    // UI callbacks & Event wiring
+    this.title.ready.then(() => {
+      this.audio.init();
+      this.audio.startMusic();
+      this.paused = false;
+      this.hints.showOnboarding(this.input.isTouch);
+    });
+
+    this.pauseMenu.onResume = () => {
+      this.paused = false;
+    };
+    this.pauseMenu.onGarage = () => {
+      this.paused = true;
+      this.garage.enter(this.player.position, this.player.up);
+    };
+
+    this.garage.onExit = () => {
+      this.paused = false;
+      this.scene.remove(this.bike.group);
+      this.bike = new BikeModel(appearanceFromEquipped());
+      this.scene.add(this.bike.group);
+    };
+
+    const hudGarage = document.getElementById('hud-garage-btn');
+    const hudPause = document.getElementById('hud-pause-btn');
+
+    hudGarage?.addEventListener('click', () => {
+      if (!this.paused && this.race.state === 'idle' && !this.garage.isOpen) {
+        this.paused = true;
+        this.garage.enter(this.player.position, this.player.up);
+      }
+    });
+
+    hudPause?.addEventListener('click', () => {
+      if (this.garage.isOpen) return;
+      if (this.pauseMenu.isOpen()) {
+        this.pauseMenu.close();
+        this.paused = false;
+      } else {
+        this.pauseMenu.open();
+        this.paused = true;
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape') {
+        if (this.garage.isOpen) {
+          this.garage.exit();
+        } else if (this.pauseMenu.isOpen()) {
+          this.pauseMenu.close();
+          this.paused = false;
+        } else if (!this.paused && this.race.state === 'idle') {
+          this.pauseMenu.open();
+          this.paused = true;
+        }
+      }
+    });
+
     this.syncBikeTransform();
     this.followCam.snap(this.player);
 
@@ -171,6 +266,7 @@ export class Game {
   private startRace(def: RivalDef): void {
     this.paused = false;
     this.raceHud.show();
+    this.audio.setState('race');
     const level = Math.min(gameStore.getState().wins[def.id] ?? 0, 3);
     this.race.start(def, this.player, this.followCam.camera, {
       difficulty: CONFIG.ai.firstRaceEase + level * CONFIG.ai.rematchStatStep,
@@ -197,7 +293,7 @@ export class Game {
     const canRide = !this.paused && this.race.state !== 'cutscene' &&
       this.race.state !== 'countdown' && this.race.state !== 'finished';
     if (canRide) this.player.update(dt, frame);
-    if (racing) {
+    if (racing && !this.paused) {
       this.race.update(dt, this.player);
       if (this.race.state === 'racing' || this.race.state === 'countdown') {
         this.raceHud.update(
@@ -209,12 +305,22 @@ export class Game {
       }
     }
 
+    if (this.garage.isOpen) {
+      this.garage.update(dt);
+    }
+
     // Pavé cobblestone vibration: on the road, inside the pavé zone.
     _playerDir.copy(this.player.position).normalize();
     const onRoad = this.planet.isNearRoad(_playerDir, 1.15);
     const inPave = angularDistance(_playerDir, ZONES.pave.center) < ZONES.pave.radius;
     const speedRatio = this.player.speed / CONFIG.player.maxSpeed;
     this.bike.setVibration(onRoad && inPave ? Math.min(1, speedRatio * 1.4) : 0);
+
+    // Audio updates
+    if (!this.paused && this.player.justBoosted) {
+      this.audio.playBoost();
+    }
+    this.audio.updateWind(this.paused ? 0 : speedRatio);
 
     // Bike visuals + FX.
     this.bike.update(dt, this.player.speed, this.player.smoothSteer, this.player.justBoosted);
@@ -236,7 +342,7 @@ export class Game {
     this.musettes.update(dt, this.player.position);
     this.dressing.update(dt, this.player.position);
     this.rivals.update(dt, this.player.position);
-    if (!racing && this.rivals.inRange && this.challengeArmed && !this.challenge.isOpen()) {
+    if (!this.paused && !racing && this.rivals.inRange && this.challengeArmed && !this.challenge.isOpen()) {
       this.challengeArmed = false;
       this.paused = true;
       const s = gameStore.getState();

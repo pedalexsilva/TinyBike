@@ -39,9 +39,9 @@ export function appearanceFromEquipped(): Partial<BikeAppearance> {
   return {
     jersey: colorOf('jersey') ?? 0xffd23f,
     helmet: colorOf('helmet') ?? 0xffffff,
-    glassesColor: colorOf('glasses') ?? 0x1c1f2e,
+    glasses: colorOf('glasses') ?? 0x1c1f2e,
     frame: colorOf('frame') ?? 0xe84545,
-    rimColor: colorOf('wheels') ?? 0xcccccc,
+    wheels: colorOf('wheels') ?? 0xcccccc,
   };
 }
 

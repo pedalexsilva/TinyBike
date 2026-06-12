@@ -44,6 +44,7 @@ export class RaceManager {
   onCountdownTick: ((n: number) => void) | null = null; // 3,2,1,0(GO)
   onFinished: ((result: RaceResult, time: number, def: RivalDef) => void) | null = null;
   onGateMissed: (() => void) | null = null;
+  onCheckpointPassed: (() => void) | null = null;
 
   private readonly planet: Planet;
   private readonly raceGroup = new THREE.Group();
@@ -219,7 +220,7 @@ export class RaceManager {
         gate.passed = true;
         this.tintGate(gate, 0x2ecc71);
         this.nextGate++;
-        // TODO(P17): checkpoint chime.
+        if (this.onCheckpointPassed) this.onCheckpointPassed();
       } else if (this.playerMeters > gate.atMeters + CONFIG.race.gateMissMargin) {
         // Soft reset to the previous gate (or the start line).
         const back = this.gates[this.nextGate - 1];

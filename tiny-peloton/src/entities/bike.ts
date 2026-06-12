@@ -15,6 +15,8 @@ export interface BikeAppearance {
   skin: number;
   frame: number;
   helmet: number;
+  glasses: number;
+  wheels: number;
   /** Caricature dials. */
   headScale: number;
   torsoWidth: number;
@@ -27,6 +29,8 @@ const PLAYER_LOOK: BikeAppearance = {
   skin: 0xffc9a3,
   frame: 0xe84545,
   helmet: 0xffffff,
+  glasses: 0x1c1f2e,
+  wheels: 0xcccccc,
   headScale: 1,
   torsoWidth: 1,
   smile: false,
@@ -64,7 +68,7 @@ export class BikeModel {
     const tireGeo = new THREE.TorusGeometry(R, 0.09, 8, 20);
     const spokeGeo = new THREE.BoxGeometry(0.02, R * 1.9, 0.02);
     const tireMat = toonMat(DARK);
-    const rimMat = toonMat(0xcccccc);
+    const rimMat = toonMat(look.wheels);
     for (const z of [R * 1.55, -R * 1.55]) {
       const wheel = new THREE.Group();
       const tire = new THREE.Mesh(tireGeo, tireMat);
@@ -157,7 +161,7 @@ export class BikeModel {
     addOutline(helmet, 0.05);
     this.head.add(helmet); // scales with the head
 
-    const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.13, 0.1), toonMat(DARK));
+    const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.13, 0.1), toonMat(look.glasses));
     glasses.position.set(0, 0.04, 0.36);
     this.head.add(glasses);
 
