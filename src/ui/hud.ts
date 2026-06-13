@@ -8,6 +8,10 @@ import type { Input } from '../core/input';
 export class Hud {
   private boostFill: HTMLElement;
   private boostBar: HTMLElement;
+  private hydroFill: HTMLElement;
+  private hydroBar: HTMLElement;
+  private comboBadge: HTMLElement;
+  private comboValue: HTMLElement;
   private speedEl: HTMLElement;
   private fpsEl: HTMLElement;
   private stick: HTMLElement;
@@ -31,6 +35,8 @@ export class Hud {
           <div id="fps"></div>
         </div>
         <div id="boost-bar"><div id="boost-fill"></div><span id="boost-label">BOOST</span></div>
+        <div id="hydro-bar"><div id="hydro-fill"></div><span id="hydro-label">HYDRATION</span></div>
+        <div id="combo-badge" class="hidden">COMBO ×<span id="combo-value">1.00</span></div>
         <div id="touch-steer" class="touch-only"><div id="joy-base"><div id="joy-stick"></div></div></div>
         <button id="boost-btn" class="touch-only">BOOST</button>
         <div id="hint" class="desktop-only">WASD / arrows to ride &nbsp;·&nbsp; SPACE to boost</div>
@@ -39,6 +45,10 @@ export class Hud {
 
     this.boostFill = document.getElementById('boost-fill')!;
     this.boostBar = document.getElementById('boost-bar')!;
+    this.hydroFill = document.getElementById('hydro-fill')!;
+    this.hydroBar = document.getElementById('hydro-bar')!;
+    this.comboBadge = document.getElementById('combo-badge')!;
+    this.comboValue = document.getElementById('combo-value')!;
     this.speedEl = document.getElementById('speed')!;
     this.fpsEl = document.getElementById('fps')!;
     this.stick = document.getElementById('joy-stick')!;
@@ -85,13 +95,28 @@ export class Hud {
     });
   }
 
-  update(dt: number, speed: number, boostCharge: number, boosting: boolean): void {
+  update(
+    dt: number,
+    speed: number,
+    boostCharge: number,
+    boosting: boolean,
+    hydration: number,
+    bonk: boolean,
+    combo: number,
+  ): void {
     // Displayed speed: scaled so the numbers read like pro cycling (~70 km/h sprints).
     this.speedEl.firstChild!.textContent = String(Math.round(speed * 5));
 
     this.boostFill.style.width = `${Math.round(boostCharge * 100)}%`;
     this.boostBar.classList.toggle('ready', boostCharge >= 1 && !boosting);
     this.boostBar.classList.toggle('boosting', boosting);
+
+    this.hydroFill.style.width = `${Math.round(hydration * 100)}%`;
+    this.hydroBar.classList.toggle('low', hydration < 0.3);
+    this.hydroBar.classList.toggle('bonk', bonk);
+
+    this.comboBadge.classList.toggle('hidden', combo <= 0.001);
+    this.comboValue.textContent = (1 + combo).toFixed(2);
 
     // FPS (updated twice per second).
     this.fpsAccum += dt;

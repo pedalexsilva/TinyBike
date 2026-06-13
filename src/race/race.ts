@@ -23,6 +23,8 @@ export type RaceResult = 'win' | 'lose';
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _side = new THREE.Vector3();
+const _camFwd = new THREE.Vector3();
+const _camUp = new THREE.Vector3();
 const Y = new THREE.Vector3(0, 1, 0);
 
 /** Guide colour for the racing line + next-gate halo (bright, blooms). */
@@ -191,6 +193,13 @@ export class RaceManager {
     });
     tl.eventCallback('onUpdate', () => {
       lookTarget.set(look.x, look.y, look.z);
+      // Keep the camera "up" orthogonal to the view direction so lookAt never
+      // degenerates (the apex shot looks almost straight down → a radial up
+      // would be parallel to the view and flip the image upside down).
+      _camFwd.copy(lookTarget).sub(camera.position).normalize();
+      _camUp.copy(player.up).addScaledVector(_camFwd, -player.up.dot(_camFwd));
+      if (_camUp.lengthSq() < 1e-4) _camUp.copy(player.heading); // near-vertical view
+      camera.up.copy(_camUp.normalize());
       camera.lookAt(lookTarget);
     });
   }

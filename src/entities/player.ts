@@ -34,6 +34,25 @@ export class Player {
   /** Smoothed steer value, useful for lean/FX. */
   smoothSteer = 0;
 
+  /** 0..1 hydration meter. Depletes over time, refilled by bidons. */
+  hydration = 1;
+  /** True once hydration hits 0 — reduced top speed + heading wobble. */
+  bonk = false;
+  /** 0..CONFIG.combo.max — extra top-speed fraction from clean bidon pickups. */
+  combo = 0;
+  /** Seconds remaining of the "fresh legs" speed bump from a bidon pickup. */
+  freshLegsTimer = 0;
+  /** Temporary slipstream draft behind the support car (set by the game). */
+  slipstream = false;
+
+  /** True while the rider is down after a crash — input is ignored. */
+  crashed = false;
+  crashTimer = 0;
+  /** Seconds of crash immunity after getting back up (prevents crash loops). */
+  crashGrace = 0;
+  /** True only on the frame a crash was triggered (for FX/camera kicks). */
+  justCrashed = false;
+
   private readonly planet: Planet;
 
   constructor(planet: Planet) {
@@ -57,6 +76,14 @@ export class Player {
     this.speed = 0;
     this.boostTimer = 0;
     this.smoothSteer = 0;
+    this.hydration = 1;
+    this.bonk = false;
+    this.combo = 0;
+    this.freshLegsTimer = 0;
+    this.slipstream = false;
+    this.crashed = false;
+    this.crashTimer = 0;
+    this.crashGrace = 0;
   }
 
   get boosting(): boolean {
@@ -64,12 +91,73 @@ export class Player {
   }
 
   get maxSpeed(): number {
-    return CONFIG.player.maxSpeed * (this.boosting ? CONFIG.boost.multiplier : 1);
+    let m = CONFIG.player.maxSpeed * (this.boosting ? CONFIG.boost.multiplier : 1);
+    m *= 1 + this.combo;
+    if (this.freshLegsTimer > 0) m *= 1 + CONFIG.hydration.freshLegsBoost;
+    if (this.slipstream) m *= 1 + CONFIG.supportCar.slipstreamBoost;
+    if (this.bonk) m *= 1 - CONFIG.hydration.bonkSpeedPenalty;
+    return m;
+  }
+
+  /** Called by the game when a bidon is collected. */
+  collectBottle(): void {
+    this.hydration = Math.min(1, this.hydration + CONFIG.hydration.bottleRefill);
+    this.freshLegsTimer = CONFIG.hydration.freshLegsDuration;
+    if (!this.bonk) {
+      this.combo = Math.min(CONFIG.combo.max, this.combo + CONFIG.combo.perBottleGain);
+    }
+  }
+
+  /** Called by the game on collision with a barrier, the support car, or a pavé bonk. */
+  crash(): void {
+    if (this.crashed || this.crashGrace > 0) return;
+    this.crashed = true;
+    this.justCrashed = true;
+    this.crashTimer = CONFIG.crash.duration;
+    this.speed = 0;
+    this.boostTimer = 0;
+    this.combo = 0;
+  }
+
+  /**
+   * Get back on the bike after a fall: snapped to a safe spot (passed in by
+   * the game — the road centerline, inside any barriers) facing along the
+   * route, with a brief immunity window and enough hydration to leave the
+   * bonk state so the same hazard can't immediately knock the rider down.
+   */
+  recoverCrash(position: THREE.Vector3, forward: THREE.Vector3): void {
+    this.position.copy(position);
+    this.up.copy(position).normalize();
+    this.heading.copy(forward);
+    projectOnTangentPlane(this.heading, this.up, this.heading).normalize();
+    orientToSurface(this.quaternion, this.up, this.heading);
+    this.speed = 0;
+    this.crashGrace = CONFIG.crash.graceDuration;
+    this.hydration = Math.max(this.hydration, CONFIG.crash.recoverHydration);
+    this.bonk = false;
   }
 
   update(dt: number, input: InputFrame): void {
     const C = CONFIG.player;
     const B = CONFIG.boost;
+    const H = CONFIG.hydration;
+
+    this.justCrashed = false;
+    if (this.crashGrace > 0) this.crashGrace = Math.max(0, this.crashGrace - dt);
+
+    // --- Crash recovery: input is ignored until the timer runs out ---
+    if (this.crashed) {
+      this.crashTimer -= dt;
+      if (this.crashTimer <= 0) this.crashed = false;
+      input = { throttle: 0, steer: 0, brake: 0, boostPressed: false };
+    }
+
+    // --- Hydration drains over time; bonking resets the combo ---
+    this.hydration = Math.max(0, this.hydration - H.depleteRate * dt);
+    if (this.freshLegsTimer > 0) this.freshLegsTimer = Math.max(0, this.freshLegsTimer - dt);
+    const wasBonk = this.bonk;
+    this.bonk = this.hydration <= 0;
+    if (this.bonk && !wasBonk) this.combo = 0;
 
     // --- Boost state ---
     this.justBoosted = false;
@@ -102,6 +190,7 @@ export class Player {
         ? Math.max(0.22, 1 - C.slopeSpeedPenalty * grade)
         : Math.min(1.3, 1 - C.downhillBonus * grade);
     this.speed = THREE.MathUtils.clamp(this.speed, 0, this.maxSpeed * gradeCap);
+    if (this.crashed) this.speed = 0;
 
     // --- Steering (rotate heading around local up) ---
     const speedRatio = this.speed / C.maxSpeed;
@@ -113,6 +202,11 @@ export class Player {
         THREE.MathUtils.clamp((speedRatio - 0.55) / 0.45, 0, 1),
       );
     this.heading.applyAxisAngle(this.up, -input.steer * C.steerRate * authority * dt);
+
+    // Bonk wobble: random heading drift while out of hydration.
+    if (this.bonk && !this.crashed) {
+      this.heading.applyAxisAngle(this.up, (Math.random() - 0.5) * H.bonkWobble * dt);
+    }
 
     const steerT = 1 - Math.exp(-10 * dt);
     this.smoothSteer += (input.steer * authority - this.smoothSteer) * steerT;

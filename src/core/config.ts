@@ -38,6 +38,36 @@ export const CONFIG = {
     shake: 0.3, // screen shake magnitude on activation
   },
 
+  hydration: {
+    depleteRate: 0.045, // fraction/second (empties in ~22s without refill)
+    bottleRefill: 0.4, // hydration gained per bidon
+    freshLegsBoost: 0.15, // +15% top speed for freshLegsDuration after a pickup
+    freshLegsDuration: 1.0, // seconds
+    bonkSpeedPenalty: 0.35, // -35% top speed once hydration hits 0
+    bonkWobble: 0.6, // random heading jitter (rad/s) while bonked
+  },
+
+  combo: {
+    perBottleGain: 0.05, // +5% top speed per bottle collected in a row
+    max: 0.25, // cap at +25%
+  },
+
+  crash: {
+    duration: 1.4, // seconds without control after a fall
+    shake: 0.6, // screen shake magnitude on impact
+    triggerSpeedMin: 6, // m/s — barrier/car hits below this don't cause a fall
+    paveBonkChance: 0.6, // probability/second of falling while bonked on pavé
+    graceDuration: 2.0, // seconds of crash immunity after getting back up
+    recoverHydration: 0.5, // hydration restored on recovery (breaks the bonk loop)
+  },
+
+  supportCar: {
+    speed: 9.5, // m/s along the road
+    collisionRadius: 2.2, // meters — hitting the car triggers a crash
+    slipstreamRadius: 3.0, // meters behind the car granting a draft
+    slipstreamBoost: 0.2, // +20% top speed while drafting
+  },
+
   bike: {
     wheelRadius: 0.55,
     leanAngle: 0.55, // max roll in curves (rad)
@@ -74,6 +104,9 @@ export const CONFIG = {
     gateMissMargin: 28, // meters past a gate before soft reset
     sprintMeters: 130, // SPRINT route length ending at the arch
     countdownSeconds: 3,
+    finishStraightMeters: 90, // barrier-lined corridor leading into the vila arch
+    barrierSpacing: 4, // meters between barrier panels
+    barrierOffset: 1.9, // lateral distance from road center to the barriers
   },
 
   fx: {
