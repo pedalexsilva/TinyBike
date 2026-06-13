@@ -210,6 +210,15 @@ export class RaceManager {
       if (this.countdownLeft <= 0) this.state = 'racing';
       return;
     }
+    // After the line: keep the rival's model animating so the winner can
+    // celebrate (and the loser coast to a stop) while the results show.
+    if (this.state === 'finished') {
+      if (this.rival) {
+        this.rival.speed *= Math.exp(-1.6 * dt);
+        this.rival.model.update(dt, this.rival.speed, 0, false);
+      }
+      return;
+    }
     if (this.state !== 'racing' || !this.rival || !this.def) return;
 
     this.raceTime += dt;
@@ -272,6 +281,11 @@ export class RaceManager {
   end(): void {
     this.cleanup();
     this.state = 'idle';
+  }
+
+  /** Make the rival perform the victory salute (called when the rival wins). */
+  celebrateRival(): void {
+    this.rival?.model.setCelebrating(true);
   }
 
   // ------------------------------------------------------------ INTERNAL

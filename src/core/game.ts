@@ -200,13 +200,16 @@ export class Game {
         reward = rewardForWin(def.id, winNumber);
         if (reward) store.addItem(reward.id);
         this.audio.playVictory();
+        this.bike.setCelebrating(true); // the player throws their arms up
       } else {
         this.audio.playDefeat();
+        this.race.celebrateRival(); // the rival salutes the win
       }
       this.raceHud.showResults(result, time, def, best, reward);
     };
     this.raceHud.onContinue = () => {
       this.race.end();
+      this.bike.setCelebrating(false);
       this.raceHud.hide();
       this.audio.setState('explore');
       this.paused = false;
@@ -215,6 +218,7 @@ export class Game {
     this.raceHud.onRetry = () => {
       const def = this.race.def;
       this.race.end();
+      this.bike.setCelebrating(false);
       if (def) this.startRace(def);
     };
     this.challenge.onRace = (def) => {
@@ -301,6 +305,7 @@ export class Game {
 
   private startRace(def: RivalDef): void {
     this.paused = false;
+    this.bike.setCelebrating(false);
     this.raceHud.show();
     this.audio.setState('race');
     const level = Math.min(gameStore.getState().wins[def.id] ?? 0, 3);
