@@ -38,6 +38,7 @@ import { Garage, appearanceFromEquipped } from '../ui/garage';
 import { AudioManager } from '../audio/audio';
 
 const MAX_DELTA = 0.05; // 50ms clamp — tab switches don't teleport the player
+const CELEBRATION_SECONDS = 3.4; // winner orbit before the results card
 
 const _playerDir = new THREE.Vector3();
 
@@ -65,6 +66,13 @@ export class Game {
   private challengeArmed = true;
   private paused = true; // start paused for title screen
   private garageOrbit = 0;
+
+  // Celebration camera: a slow orbit around the winner before results show.
+  private celebrationActive = false;
+  private celebrationTime = 0;
+  private readonly celebrationCenter = new THREE.Vector3();
+  private readonly celebrationUp = new THREE.Vector3();
+  private pendingResults: (() => void) | null = null;
   private readonly trail = new TrailFX();
   private readonly dust = new DustFX();
   private readonly speedLines: SpeedLinesFX;
@@ -205,7 +213,9 @@ export class Game {
         this.audio.playDefeat();
         this.race.celebrateRival(); // the rival salutes the win
       }
-      this.raceHud.showResults(result, time, def, best, reward);
+      // Orbit the winner for a beat, then reveal the results card.
+      this.pendingResults = () => this.raceHud.showResults(result, time, def, best, reward);
+      this.beginCelebrationCam(result === 'win');
     };
     this.raceHud.onContinue = () => {
       this.race.end();
@@ -306,6 +316,8 @@ export class Game {
   private startRace(def: RivalDef): void {
     this.paused = false;
     this.bike.setCelebrating(false);
+    this.celebrationActive = false;
+    this.pendingResults = null;
     this.raceHud.show();
     this.audio.setState('race');
     const level = Math.min(gameStore.getState().wins[def.id] ?? 0, 3);
@@ -420,6 +432,8 @@ export class Game {
       this.followCam.camera.up.copy(up);
       const look = this.garage.podiumCenter.clone().addScaledVector(up, 1.2);
       this.followCam.camera.lookAt(look);
+    } else if (this.celebrationActive) {
+      this.updateCelebrationCam(dt);
     } else if (this.race.state !== 'cutscene') this.followCam.update(dt, this.player);
     this.sky.update(dt, this.followCam.camera.position);
 
@@ -435,6 +449,50 @@ export class Game {
     this.blobShadow.position.copy(this.player.position).addScaledVector(this.player.up, 0.05);
     this.blobShadow.quaternion.copy(this.player.quaternion);
     this.blobShadow.rotateX(-Math.PI / 2);
+  }
+
+  /** Start a cinematic orbit around the winner; results show when it ends. */
+  private beginCelebrationCam(playerWon: boolean): void {
+    let center: THREE.Vector3 | null;
+    if (playerWon) {
+      center = this.player.position.clone();
+      this.celebrationUp.copy(this.player.up);
+    } else {
+      center = this.race.rivalCelebrationCenter;
+      this.celebrationUp.copy(center ? center.clone().normalize() : this.player.up);
+    }
+    this.celebrationCenter.copy(center ?? this.player.position);
+    this.celebrationTime = 0;
+    this.celebrationActive = true;
+  }
+
+  private updateCelebrationCam(dt: number): void {
+    this.celebrationTime += dt;
+    const cam = this.followCam.camera;
+    const up = this.celebrationUp;
+    // Orbit basis orthogonal to the surface normal (same trick as the garage).
+    const e1 = new THREE.Vector3(1, 0, 0);
+    if (Math.abs(up.dot(e1)) > 0.9) e1.set(0, 0, 1);
+    e1.cross(up).normalize();
+    const e2 = new THREE.Vector3().crossVectors(up, e1);
+    const ang = this.celebrationTime * 0.9;
+    cam.position
+      .copy(this.celebrationCenter)
+      .addScaledVector(e1, Math.cos(ang) * 6.2)
+      .addScaledVector(e2, Math.sin(ang) * 6.2)
+      .addScaledVector(up, 2.7);
+    cam.up.copy(up);
+    cam.lookAt(this.celebrationCenter.clone().addScaledVector(up, 1.0));
+    if (this.celebrationTime >= CELEBRATION_SECONDS) this.endCelebrationCam();
+  }
+
+  private endCelebrationCam(): void {
+    this.celebrationActive = false;
+    this.followCam.snap(this.player);
+    if (this.pendingResults) {
+      this.pendingResults();
+      this.pendingResults = null;
+    }
   }
 
   private render(): void {
