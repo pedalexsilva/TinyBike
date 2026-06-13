@@ -57,6 +57,8 @@ export const CONFIG = {
     shake: 0.6, // screen shake magnitude on impact
     triggerSpeedMin: 6, // m/s — barrier/car hits below this don't cause a fall
     paveBonkChance: 0.6, // probability/second of falling while bonked on pavé
+    graceDuration: 2.0, // seconds of crash immunity after getting back up
+    recoverHydration: 0.5, // hydration restored on recovery (breaks the bonk loop)
   },
 
   supportCar: {
