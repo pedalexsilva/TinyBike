@@ -14,13 +14,15 @@ import { scatterProps } from '../world/props';
 import { TourProps } from '../world/tour-props';
 import { Monuments } from '../world/monuments';
 import { Musettes } from '../world/collectibles';
+import { Bidons } from '../world/hydration';
 import { Dressing } from '../world/dressing';
-import { angularDistance } from '../world/zones';
+import { ZONES, angularDistance } from '../world/zones';
 import { sectorForDir, type SectorId } from '../world/planet-def';
 import { PostFX } from '../render/post';
 import { SectorBanner } from '../ui/sector-banner';
 import { Player } from '../entities/player';
 import { BikeModel } from '../entities/bike';
+import { SupportCar } from '../entities/support-car';
 import { RivalsSystem } from '../entities/rival-npc';
 import { TrailFX } from '../fx/trail';
 import { DustFX } from '../fx/dust';
@@ -41,6 +43,8 @@ const MAX_DELTA = 0.05; // 50ms clamp — tab switches don't teleport the player
 const CELEBRATION_SECONDS = 3.4; // winner orbit before the results card
 
 const _playerDir = new THREE.Vector3();
+const _toPlayer = new THREE.Vector3();
+const _sideVec = new THREE.Vector3();
 
 export class Game {
   private readonly renderer: THREE.WebGLRenderer;
@@ -57,6 +61,8 @@ export class Game {
   private readonly tourProps: TourProps;
   private readonly monuments: Monuments;
   private readonly musettes: Musettes;
+  private readonly bidons: Bidons;
+  private readonly supportCar: SupportCar;
   private readonly dressing: Dressing;
   private readonly rivals: RivalsSystem;
   private readonly challenge: ChallengePanel;
@@ -64,6 +70,8 @@ export class Game {
   private readonly race: RaceManager;
   /** Re-armed when the player leaves the challenge radius. */
   private challengeArmed = true;
+  /** Tracks player.crashed transitions to clear the bike tumble pose. */
+  private wasCrashed = false;
   private paused = true; // start paused for title screen
   private garageOrbit = 0;
 
@@ -128,8 +136,18 @@ export class Game {
     this.scene.add(this.monuments.group);
     this.musettes = new Musettes(this.planet);
     this.scene.add(this.musettes.mesh);
+    this.bidons = new Bidons(this.planet);
+    this.scene.add(this.bidons.mesh);
     this.dressing = new Dressing(this.planet);
     this.scene.add(this.dressing.group);
+
+    // Support car: loops the road, starting in the pavé sector.
+    const paveZone = ZONES.pave;
+    const startU = paveZone
+      ? this.planet.road.uAt(this.planet.road.closestIndex(paveZone.center))
+      : 0;
+    this.supportCar = new SupportCar(startU);
+    this.scene.add(this.supportCar.group);
     this.rivals = new RivalsSystem(this.planet, 'tour');
     this.scene.add(this.rivals.group);
     this.musettes.onCollect = (pos, up) => {
@@ -185,6 +203,11 @@ export class Game {
       this.player.boostCharge = 1; // musette = instant full boost bar
       if (this.quality.fxEnabled) this.dust.spawn(pos, up, 10);
       this.audio.playCollect();
+    };
+    this.bidons.onCollect = (pos, up) => {
+      this.player.collectBottle();
+      if (this.quality.fxEnabled) this.dust.spawn(pos, up, 10);
+      this.audio.playBottle();
     };
 
     this.race.onCountdownTick = (n) => {
@@ -366,6 +389,19 @@ export class Game {
     const speedRatio = this.player.speed / CONFIG.player.maxSpeed;
     this.bike.setVibration(onRoad && inPave ? Math.min(1, speedRatio * 1.4) : 0);
 
+    if (canRide) {
+      // Bonking on the cobbles risks a fall.
+      if (onRoad && inPave && this.player.bonk) {
+        if (Math.random() < CONFIG.crash.paveBonkChance * dt) this.triggerCrash();
+      }
+      this.checkSupportCar();
+      this.checkFinishStraight();
+    }
+
+    // Clear the bike's tumble pose once the crash timer runs out.
+    if (this.wasCrashed && !this.player.crashed) this.bike.setCrashed(false);
+    this.wasCrashed = this.player.crashed;
+
     // Audio updates
     if (!this.paused && this.player.justBoosted) {
       this.audio.playBoost();
@@ -403,6 +439,8 @@ export class Game {
     }
 
     this.musettes.update(dt, this.player.position);
+    this.bidons.update(dt, this.player.position);
+    this.supportCar.update(dt, this.planet);
     this.dressing.update(dt, this.player.position);
     this.rivals.update(dt, this.player.position);
     if (!this.paused && !racing && this.rivals.inRange && this.challengeArmed && !this.challenge.isOpen()) {
@@ -437,7 +475,57 @@ export class Game {
     } else if (this.race.state !== 'cutscene') this.followCam.update(dt, this.player);
     this.sky.update(dt, this.followCam.camera.position);
 
-    this.hud.update(dt, this.player.speed, this.player.boostCharge, this.player.boosting);
+    this.hud.update(
+      dt,
+      this.player.speed,
+      this.player.boostCharge,
+      this.player.boosting,
+      this.player.hydration,
+      this.player.bonk,
+      this.player.combo,
+    );
+  }
+
+  /** Knock the player down: tumble animation, screen shake, control lockout. */
+  private triggerCrash(): void {
+    if (this.player.crashed) return;
+    this.player.crash();
+    this.bike.setCrashed(true);
+    this.audio.playCrash();
+  }
+
+  /** Support car collision (crash) and slipstream draft. */
+  private checkSupportCar(): void {
+    if (this.player.crashed) {
+      this.player.slipstream = false;
+      return;
+    }
+    const collR = CONFIG.supportCar.collisionRadius;
+    const distSq = this.player.position.distanceToSquared(this.supportCar.position);
+    if (distSq < collR * collR && this.player.speed > CONFIG.crash.triggerSpeedMin) {
+      this.triggerCrash();
+      this.player.slipstream = false;
+      return;
+    }
+    // Drafting: behind the car (relative to its direction of travel) and close.
+    const slipR = CONFIG.supportCar.slipstreamRadius + collR;
+    _toPlayer.subVectors(this.player.position, this.supportCar.position);
+    const behind = _toPlayer.dot(this.supportCar.tangent) < 0;
+    this.player.slipstream = behind && distSq < slipR * slipR;
+  }
+
+  /** Clipping the barriers on the finish straight triggers a crash. */
+  private checkFinishStraight(): void {
+    if (this.player.speed <= CONFIG.crash.triggerSpeedMin) return;
+    const road = this.planet.road;
+    _playerDir.copy(this.player.position).normalize();
+    const idx = road.closestIndex(_playerDir);
+    const frac = CONFIG.race.finishStraightMeters / road.totalLength;
+    if (road.uAt(idx) < 1 - frac) return;
+    const s = road.samples[idx];
+    _sideVec.crossVectors(s.tangent, s.dir).normalize();
+    _toPlayer.subVectors(this.player.position, s.position);
+    if (Math.abs(_toPlayer.dot(_sideVec)) > CONFIG.race.barrierOffset) this.triggerCrash();
   }
 
   private syncBikeTransform(): void {

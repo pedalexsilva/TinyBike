@@ -71,8 +71,9 @@ export class FollowCamera {
       this.camera.updateProjectionMatrix();
     }
 
-    // Screen shake on boost activation, exponentially decaying.
+    // Screen shake on boost activation or a crash, exponentially decaying.
     if (player.justBoosted && !this.reduceShake) this.shakeMag = CONFIG.boost.shake;
+    if (player.justCrashed && !this.reduceShake) this.shakeMag = CONFIG.crash.shake;
     if (this.shakeMag > 0.001) {
       _shake
         .set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
