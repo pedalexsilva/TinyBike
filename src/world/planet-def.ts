@@ -35,6 +35,27 @@ export interface PlanetPalette {
   cobble: number;
 }
 
+export type SectorId = 'france' | 'italia' | 'portugal';
+
+/**
+ * A national sector: a longitude arc of the loop themed after a Grand Tour.
+ * Sectors are a cosmetic layer over the existing zones — they drive the
+ * roadside banner, monument grouping and accent colours, nothing physical.
+ */
+export interface SectorDef {
+  id: SectorId;
+  /** Display name shown on the banner. */
+  name: string;
+  /** Country line shown under the name. */
+  tour: string;
+  flag: string;
+  /** Longitude arc [start, end) in degrees, 0..360. */
+  lonStart: number;
+  lonEnd: number;
+  /** Brand accent colour (hex). */
+  accent: number;
+}
+
 export interface PlanetDef {
   id: PlanetId;
   seed: number;
@@ -42,10 +63,32 @@ export interface PlanetDef {
   snowHeight: number;
   domes: DomeDef[];
   zones: ZoneDef[];
+  sectors: SectorDef[];
   /** Zone whose road segment gets the cobble tint + bike vibration. */
   paveZoneId: string | null;
   roadControlLatLon: ReadonlyArray<readonly [number, number]>;
   palette: PlanetPalette;
+}
+
+/** Sector containing a longitude (degrees). Falls back to the first sector. */
+export function sectorForLon(def: PlanetDef, lonDeg: number): SectorDef {
+  let lon = lonDeg % 360;
+  if (lon < 0) lon += 360;
+  for (const s of def.sectors) {
+    if (s.lonStart <= s.lonEnd) {
+      if (lon >= s.lonStart && lon < s.lonEnd) return s;
+    } else {
+      // wrap-around arc (e.g. 320 -> 40)
+      if (lon >= s.lonStart || lon < s.lonEnd) return s;
+    }
+  }
+  return def.sectors[0];
+}
+
+/** Sector containing a unit direction (matches dirFromLatLon's convention). */
+export function sectorForDir(def: PlanetDef, dir: THREE.Vector3): SectorDef {
+  const lon = (Math.atan2(dir.z, dir.x) * 180) / Math.PI;
+  return sectorForLon(def, lon);
 }
 
 /** Runtime zone (precomputed center direction). */
@@ -85,6 +128,15 @@ export const TOUR_DEF: PlanetDef = {
     { id: 'sunflowers', latLon: [13, 88], radius: 0.4, tint: 0xd8c84a, tintStrength: 0.85 },
     { id: 'pave', latLon: [-1, 172], radius: 0.4, tint: 0xc9bb7a, tintStrength: 0.75 },
     { id: 'alpe', latLon: [50, 242], radius: 0.62, tint: 0x8d9bb0, tintStrength: 0 },
+  ],
+  // National sectors mapped onto longitude arcs of the loop:
+  //  France  — the vila finish + sunflower fields (Tour de France).
+  //  Italia  — the white-gravel sector + the high mountain (Giro d'Italia).
+  //  Portugal— the long valley home into the finish (Volta a Portugal).
+  sectors: [
+    { id: 'france', name: 'FRANCE', tour: 'Tour de France', flag: '🇫🇷', lonStart: 0, lonEnd: 115, accent: 0x2b5fbf },
+    { id: 'italia', name: 'ITALIA', tour: "Giro d'Italia", flag: '🇮🇹', lonStart: 115, lonEnd: 260, accent: 0xe0407a },
+    { id: 'portugal', name: 'PORTUGAL', tour: 'Volta a Portugal', flag: '🇵🇹', lonStart: 260, lonEnd: 360, accent: 0x16793f },
   ],
   paveZoneId: 'pave',
   roadControlLatLon: [

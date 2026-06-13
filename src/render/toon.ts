@@ -6,11 +6,16 @@ import * as THREE from 'three';
 
 let gradientMap: THREE.DataTexture | null = null;
 
-/** Shared 3-band gradient map for MeshToonMaterial (cached). */
+/**
+ * Shared 5-band gradient map for MeshToonMaterial (cached). A richer ramp
+ * than a hard 3-band split: the extra midtones soften the terminator and
+ * lift shadows just enough to read as "premium cel" rather than flat-shaded.
+ * The lowest band stays warm-dark (not black) so shadowed faces keep colour.
+ */
 export function getToonGradient(): THREE.DataTexture {
   if (!gradientMap) {
-    const data = new Uint8Array([96, 176, 255]);
-    gradientMap = new THREE.DataTexture(data, 3, 1, THREE.RedFormat);
+    const data = new Uint8Array([74, 128, 178, 222, 255]);
+    gradientMap = new THREE.DataTexture(data, data.length, 1, THREE.RedFormat);
     gradientMap.minFilter = THREE.NearestFilter;
     gradientMap.magFilter = THREE.NearestFilter;
     gradientMap.needsUpdate = true;
@@ -38,7 +43,7 @@ export function toonMat(color: number, opts: ToonOptions = {}): THREE.MeshToonMa
   });
 }
 
-const OUTLINE_COLOR = 0x202035;
+const OUTLINE_COLOR = 0x1a1726; // warm ink — richer than neutral grey
 
 /**
  * Inverted-hull outline: adds a slightly scaled back-face copy of the mesh

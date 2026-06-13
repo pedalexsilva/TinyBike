@@ -28,7 +28,7 @@ function rng(seed: number): () => number {
 }
 
 /** Place an object on the surface at `dir` with optional yaw. */
-function surfacePose(obj: THREE.Object3D, planet: Planet, dir: THREE.Vector3, yaw = 0): void {
+export function surfacePose(obj: THREE.Object3D, planet: Planet, dir: THREE.Vector3, yaw = 0): void {
   obj.position.copy(dir).multiplyScalar(planet.radius + planet.heightAt(dir));
   obj.quaternion.setFromUnitVectors(Y, dir);
   if (yaw !== 0) {

@@ -17,16 +17,18 @@ const SKY_VERT = /* glsl */ `
 
 const SKY_FRAG = /* glsl */ `
   uniform vec3 uTop;
+  uniform vec3 uMid;
   uniform vec3 uBottom;
   uniform vec3 uSunDir;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
-    float t = smoothstep(-0.25, 0.55, d.y);
-    vec3 col = mix(uBottom, uTop, t);
+    // Three-stop vertical gradient: warm horizon -> sky blue -> deep zenith.
+    vec3 col = mix(uBottom, uMid, smoothstep(-0.05, 0.45, d.y));
+    col = mix(col, uTop, smoothstep(0.4, 0.95, d.y));
     float s = dot(d, normalize(uSunDir));
-    col += vec3(1.0) * smoothstep(0.9992, 0.9996, s);          // sun disc
-    col += vec3(1.0, 0.95, 0.8) * pow(max(s, 0.0), 80.0) * 0.35; // halo
+    col += vec3(1.0) * smoothstep(0.9991, 0.9996, s);            // sun disc
+    col += vec3(1.0, 0.9, 0.72) * pow(max(s, 0.0), 40.0) * 0.5;  // warm halo
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -49,8 +51,9 @@ export class Sky {
       vertexShader: SKY_VERT,
       fragmentShader: SKY_FRAG,
       uniforms: {
-        uTop: { value: new THREE.Color('#4aa8ff') },
-        uBottom: { value: new THREE.Color('#cfeaff') },
+        uTop: { value: new THREE.Color('#2f7fd6') },
+        uMid: { value: new THREE.Color('#62b4ff') },
+        uBottom: { value: new THREE.Color('#dff0ff') },
         uSunDir: { value: SUN_DIR },
       },
       side: THREE.BackSide,

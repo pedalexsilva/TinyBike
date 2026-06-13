@@ -38,6 +38,12 @@ const PLAYER_LOOK: BikeAppearance = {
 
 const DARK = 0x1c1f2e;
 
+// Arm pivot poses (radians). Rest = hands on the bars; Cel = victory salute.
+const REST_ARM_X = -0.7;
+const REST_ARM_Z = -0.1;
+const CEL_ARM_X = -2.7;
+const CEL_ARM_Z = 0.5;
+
 export class BikeModel {
   /** Root group: positioned/oriented by the controller. */
   readonly group = new THREE.Group();
@@ -51,11 +57,17 @@ export class BikeModel {
   private readonly crank = new THREE.Group();
   private readonly legL: THREE.Object3D;
   private readonly legR: THREE.Object3D;
+  private readonly armL: THREE.Object3D;
+  private readonly armR: THREE.Object3D;
   private readonly torso: THREE.Mesh;
   private wheelAngle = 0;
   private lean = 0;
   private wheelie = 0;
   private vibration = 0;
+  /** Victory celebration: 0..1 blend toward the arms-up salute. */
+  private celebrating = false;
+  private cel = 0;
+  private celTime = 0;
   /** Rear-wheel ground contact in world space (for trail/dust FX). */
   readonly rearContact = new THREE.Vector3();
 
@@ -200,13 +212,21 @@ export class BikeModel {
     this.bidon.visible = false;
     this.head.add(this.bidon);
 
+    // Arms hang from shoulder pivots so they can swing from the bars up into
+    // the victory salute (see update()).
     const armMat = toonMat(look.jersey);
-    for (const side of [1, -1]) {
+    this.armL = new THREE.Object3D();
+    this.armR = new THREE.Object3D();
+    for (const [pivot, side] of [
+      [this.armL, 1],
+      [this.armR, -1],
+    ] as const) {
+      pivot.position.set(side * 0.26 * look.torsoWidth, 0.6, 0.34); // shoulder
       const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.60, 3, 8), armMat);
-      arm.position.set(side * 0.28 * look.torsoWidth, 0.48, 0.66);
-      arm.rotation.x = 1.25;
-      arm.rotation.z = side * -0.15;
-      riderRoot.add(arm);
+      arm.position.set(0, -0.3, 0); // extends down from the shoulder pivot
+      pivot.add(arm);
+      pivot.rotation.set(REST_ARM_X, 0, side * REST_ARM_Z);
+      riderRoot.add(pivot);
     }
 
     const legGeo = new THREE.CapsuleGeometry(0.11, 0.5, 3, 8);
@@ -231,8 +251,19 @@ export class BikeModel {
     this.vibration = v;
   }
 
+  /** Trigger (or clear) the arms-up victory salute — used by the race winner. */
+  setCelebrating(on: boolean): void {
+    this.celebrating = on;
+    if (!on) this.celTime = 0;
+  }
+
   update(dt: number, speed: number, smoothSteer: number, justBoosted: boolean): void {
     const B = CONFIG.bike;
+
+    // Victory celebration blend (0 = riding, 1 = arms-up salute).
+    this.cel += ((this.celebrating ? 1 : 0) - this.cel) * (1 - Math.exp(-5 * dt));
+    if (this.cel > 0.001) this.celTime += dt;
+    const cel = this.cel;
 
     // Wheel spin + pedaling cadence.
     const angVel = speed / B.wheelRadius;
@@ -240,12 +271,13 @@ export class BikeModel {
     for (const wheel of this.wheels) wheel.rotation.x = this.wheelAngle;
     this.crank.rotation.x = this.wheelAngle * B.cadenceFactor;
     const pedalPhase = this.crank.rotation.x;
-    this.legL.rotation.x = Math.sin(pedalPhase) * 0.45;
-    this.legR.rotation.x = Math.sin(pedalPhase + Math.PI) * 0.45;
+    // Legs ease to a coast while celebrating.
+    this.legL.rotation.x = Math.sin(pedalPhase) * 0.45 * (1 - cel);
+    this.legR.rotation.x = Math.sin(pedalPhase + Math.PI) * 0.45 * (1 - cel);
 
-    // Lean into curves (roll proportional to steer * speed).
+    // Lean into curves (roll proportional to steer * speed); damped while celebrating.
     const speedRatio = speed / CONFIG.player.maxSpeed;
-    const targetLean = smoothSteer * B.leanAngle * speedRatio;
+    const targetLean = smoothSteer * B.leanAngle * speedRatio * (1 - cel * 0.85);
     this.lean += (targetLean - this.lean) * (1 - Math.exp(-8 * dt));
 
     // Wheelie kick on boost start, decaying.
@@ -258,7 +290,26 @@ export class BikeModel {
     const jitterR = vib > 0 ? (Math.random() - 0.5) * vib * 0.8 : 0;
 
     this.leanPivot.position.y = jitterY;
-    this.leanPivot.rotation.set(-this.wheelie + jitterR, 0, this.lean + jitterR * 0.6);
+    // Sit back a touch and sway side-to-side during the celebration.
+    const celSway = Math.sin(this.celTime * 3) * 0.09 * cel;
+    this.leanPivot.rotation.set(
+      -this.wheelie - cel * 0.12 + jitterR,
+      0,
+      this.lean + jitterR * 0.6 + celSway,
+    );
+
+    // Victory salute: straighten up, look up, both arms raised in a pumping V.
+    this.torso.rotation.x = THREE.MathUtils.lerp(1.05, 0.2, cel);
+    this.head.rotation.x = THREE.MathUtils.lerp(0, -0.32, cel);
+    const pump = Math.sin(this.celTime * 7) * 0.22 * cel;
+    this.armL.rotation.set(
+      THREE.MathUtils.lerp(REST_ARM_X, CEL_ARM_X + pump, cel), 0,
+      THREE.MathUtils.lerp(REST_ARM_Z, CEL_ARM_Z, cel),
+    );
+    this.armR.rotation.set(
+      THREE.MathUtils.lerp(REST_ARM_X, CEL_ARM_X + pump, cel), 0,
+      THREE.MathUtils.lerp(-REST_ARM_Z, -CEL_ARM_Z, cel),
+    );
 
     // Subtle squash & stretch with speed (juice).
     const squash = 1 + Math.sin(this.wheelAngle * 2) * 0.008 * speedRatio;

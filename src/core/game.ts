@@ -12,9 +12,13 @@ import { Planet } from '../world/planet';
 import { Sky, SUN_DIR } from '../world/sky';
 import { scatterProps } from '../world/props';
 import { TourProps } from '../world/tour-props';
+import { Monuments } from '../world/monuments';
 import { Musettes } from '../world/collectibles';
 import { Dressing } from '../world/dressing';
 import { angularDistance } from '../world/zones';
+import { sectorForDir, type SectorId } from '../world/planet-def';
+import { PostFX } from '../render/post';
+import { SectorBanner } from '../ui/sector-banner';
 import { Player } from '../entities/player';
 import { BikeModel } from '../entities/bike';
 import { RivalsSystem } from '../entities/rival-npc';
@@ -50,6 +54,7 @@ export class Game {
   private readonly player: Player;
   private bike: BikeModel;
   private readonly tourProps: TourProps;
+  private readonly monuments: Monuments;
   private readonly musettes: Musettes;
   private readonly dressing: Dressing;
   private readonly rivals: RivalsSystem;
@@ -64,6 +69,9 @@ export class Game {
   private readonly dust = new DustFX();
   private readonly speedLines: SpeedLinesFX;
   private readonly hud: Hud;
+  private readonly sectorBanner: SectorBanner;
+  private currentSector: SectorId | null = null;
+  private postFX: PostFX | null = null;
   private readonly blobShadow: THREE.Mesh;
 
   private readonly garage: Garage;
@@ -85,13 +93,22 @@ export class Game {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality.maxPixelRatio));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    // Filmic tone mapping lifts the cel palette into a richer, "graded" look.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     root.appendChild(this.renderer.domElement);
+
+    // Atmospheric fog matched to the sky horizon — cheap, huge depth win.
+    this.scene.fog = new THREE.Fog(0xcfe6ff, 120, 320);
 
     // --- Lights (toon-friendly: strong key + colored hemisphere fill) ---
     const sun = new THREE.DirectionalLight(0xffe8bd, 2.8);
     sun.position.copy(SUN_DIR).multiplyScalar(200);
     const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x4a7a3a, 0.85);
-    this.scene.add(sun, hemi);
+    // Cool back/rim light from behind the sun — gives the premium cel edge.
+    const rim = new THREE.DirectionalLight(0x9fc6ff, 0.7);
+    rim.position.copy(SUN_DIR).multiplyScalar(-180).setY(60);
+    this.scene.add(sun, hemi, rim);
 
     // --- World ---
     this.scene.add(this.planet.mesh, this.planet.roadMesh, this.planet.roadMarkingsMesh);
@@ -99,6 +116,8 @@ export class Game {
     scatterProps(this.scene, this.planet, this.quality);
     this.tourProps = new TourProps(this.planet);
     this.scene.add(this.tourProps.group);
+    this.monuments = new Monuments(this.planet);
+    this.scene.add(this.monuments.group);
     this.musettes = new Musettes(this.planet);
     this.scene.add(this.musettes.mesh);
     this.dressing = new Dressing(this.planet);
@@ -145,6 +164,13 @@ export class Game {
     this.title = new TitleScreen(root);
     this.hints = new Hints(root);
     this.pauseMenu = new PauseMenu(root);
+    this.sectorBanner = new SectorBanner(root);
+
+    // Post-processing: skip entirely on low-tier (mobile) for a plain, fast
+    // render path; medium/high get bloom + SMAA + ACES via the composer.
+    if (this.quality.tier !== 'low' && this.quality.fxEnabled) {
+      this.postFX = new PostFX(this.renderer, this.scene, this.followCam.camera, this.quality);
+    }
 
     // Audio triggers
     this.musettes.onCollect = (pos, up) => {
@@ -174,13 +200,16 @@ export class Game {
         reward = rewardForWin(def.id, winNumber);
         if (reward) store.addItem(reward.id);
         this.audio.playVictory();
+        this.bike.setCelebrating(true); // the player throws their arms up
       } else {
         this.audio.playDefeat();
+        this.race.celebrateRival(); // the rival salutes the win
       }
       this.raceHud.showResults(result, time, def, best, reward);
     };
     this.raceHud.onContinue = () => {
       this.race.end();
+      this.bike.setCelebrating(false);
       this.raceHud.hide();
       this.audio.setState('explore');
       this.paused = false;
@@ -189,6 +218,7 @@ export class Game {
     this.raceHud.onRetry = () => {
       const def = this.race.def;
       this.race.end();
+      this.bike.setCelebrating(false);
       if (def) this.startRace(def);
     };
     this.challenge.onRace = (def) => {
@@ -275,6 +305,7 @@ export class Game {
 
   private startRace(def: RivalDef): void {
     this.paused = false;
+    this.bike.setCelebrating(false);
     this.raceHud.show();
     this.audio.setState('race');
     const level = Math.min(gameStore.getState().wins[def.id] ?? 0, 3);
@@ -346,6 +377,19 @@ export class Game {
     this.speedLines.update(dt, this.player.boosting);
 
     this.tourProps.update(dt);
+    this.monuments.update(dt);
+
+    // Sector banner: announce when the rider crosses into a new nation.
+    if (!this.paused && !racing) {
+      const sec = sectorForDir(this.planet.def, _playerDir);
+      if (sec.id !== this.currentSector) {
+        if (this.currentSector !== null) {
+          this.sectorBanner.show(sec.name, sec.tour, sec.flag, sec.accent);
+        }
+        this.currentSector = sec.id;
+      }
+    }
+
     this.musettes.update(dt, this.player.position);
     this.dressing.update(dt, this.player.position);
     this.rivals.update(dt, this.player.position);
@@ -394,11 +438,13 @@ export class Game {
   }
 
   private render(): void {
-    this.renderer.render(this.scene, this.followCam.camera);
+    if (this.postFX) this.postFX.render();
+    else this.renderer.render(this.scene, this.followCam.camera);
   }
 
   private onResize(): void {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.followCam.resize(window.innerWidth / window.innerHeight);
+    this.postFX?.setSize(window.innerWidth, window.innerHeight);
   }
 }

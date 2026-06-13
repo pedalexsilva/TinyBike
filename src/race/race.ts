@@ -12,6 +12,7 @@ import { CONFIG } from '../core/config';
 import { toonMat, addOutline } from '../render/toon';
 import { dirFromLatLon } from '../world/zones';
 import { RivalAI } from './rival-ai';
+import { RaceLine } from './race-line';
 import type { RivalDef } from '../entities/rivals';
 import type { Planet } from '../world/planet';
 import type { Player } from '../entities/player';
@@ -24,12 +25,17 @@ const _v2 = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const Y = new THREE.Vector3(0, 1, 0);
 
+/** Guide colour for the racing line + next-gate halo (bright, blooms). */
+const GUIDE_COLOR = 0x32e0ff;
+
 interface Gate {
   /** Unwrapped route-relative distance (meters from route start). */
   atMeters: number;
   position: THREE.Vector3;
   up: THREE.Vector3;
   group: THREE.Group;
+  /** Pulsing ring shown only on the next (active) checkpoint. */
+  halo: THREE.Mesh;
   passed: boolean;
   isFinish: boolean;
 }
@@ -49,6 +55,7 @@ export class RaceManager {
   private readonly planet: Planet;
   private readonly raceGroup = new THREE.Group();
   private rival: RivalAI | null = null;
+  private raceLine: RaceLine | null = null;
   private gates: Gate[] = [];
   private nextGate = 0;
   private startU = 0;
@@ -129,6 +136,11 @@ export class RaceManager {
     }
     this.nextGate = 0;
 
+    // Guidance racing line down the route + halo on the first checkpoint.
+    this.raceLine = new RaceLine(this.planet, this.startU, endU, GUIDE_COLOR);
+    this.raceGroup.add(this.raceLine.mesh);
+    this.highlightNextGate();
+
     // --- Grid: player left, rival right of road center ---
     road.pointAt(this.startU, _v);
     road.tangentAt(this.startU, _v2);
@@ -185,6 +197,8 @@ export class RaceManager {
   }
 
   update(dt: number, player: Player): void {
+    // Keep the guidance chevrons flowing through cutscene, countdown and race.
+    if (this.raceLine) this.raceLine.update(dt);
     if (this.state === 'countdown') {
       this.countdownLeft -= dt;
       const n = Math.max(0, Math.ceil(this.countdownLeft));
@@ -196,10 +210,23 @@ export class RaceManager {
       if (this.countdownLeft <= 0) this.state = 'racing';
       return;
     }
+    // After the line: keep the rival's model animating so the winner can
+    // celebrate (and the loser coast to a stop) while the results show.
+    if (this.state === 'finished') {
+      if (this.rival) {
+        this.rival.speed *= Math.exp(-1.6 * dt);
+        this.rival.model.update(dt, this.rival.speed, 0, false);
+      }
+      return;
+    }
     if (this.state !== 'racing' || !this.rival || !this.def) return;
 
     this.raceTime += dt;
     this.rival.update(dt, this.planet, this.startU, this.routeMeters, this.playerMeters);
+
+    // Pulse the active checkpoint halo so the immediate target reads at a glance.
+    const activeHalo = this.gates[this.nextGate]?.halo;
+    if (activeHalo) activeHalo.scale.setScalar(1 + Math.sin(this.raceTime * 5) * 0.13);
 
     // --- Player progress along the route (wrap-safe accumulation) ---
     const road = this.planet.road;
@@ -219,7 +246,9 @@ export class RaceManager {
       if (player.position.distanceToSquared(gate.position) < CONFIG.race.gateRadius ** 2) {
         gate.passed = true;
         this.tintGate(gate, 0x2ecc71);
+        gate.halo.visible = false;
         this.nextGate++;
+        this.highlightNextGate();
         if (this.onCheckpointPassed) this.onCheckpointPassed();
       } else if (this.playerMeters > gate.atMeters + CONFIG.race.gateMissMargin) {
         // Soft reset to the previous gate (or the start line).
@@ -252,6 +281,11 @@ export class RaceManager {
   end(): void {
     this.cleanup();
     this.state = 'idle';
+  }
+
+  /** Make the rival perform the victory salute (called when the rival wins). */
+  celebrateRival(): void {
+    this.rival?.model.setCelebrating(true);
   }
 
   // ------------------------------------------------------------ INTERNAL
@@ -296,8 +330,32 @@ export class RaceManager {
     const beamChild = group.children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.BoxGeometry);
     if (beamChild) beamChild.quaternion.premultiply(invQ);
 
+    // Active-checkpoint halo: a flat ring on the road (added after the invQ
+    // conversion so it sits in the group's local up-frame). Hidden by default.
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(CONFIG.road.width * 0.62, 0.1, 6, 24),
+      new THREE.MeshBasicMaterial({
+        color: GUIDE_COLOR,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      }),
+    );
+    halo.rotation.x = Math.PI / 2;
+    halo.position.y = 0.08;
+    halo.renderOrder = 3;
+    halo.visible = false;
+    group.add(halo);
+
     this.raceGroup.add(group);
-    return { atMeters, position: _v.clone(), up, group, passed: false, isFinish };
+    return { atMeters, position: _v.clone(), up, group, halo, passed: false, isFinish };
+  }
+
+  /** Show the pulsing halo only on the next (active) checkpoint. */
+  private highlightNextGate(): void {
+    for (let i = 0; i < this.gates.length; i++) {
+      this.gates[i].halo.visible = i === this.nextGate;
+    }
   }
 
   private tintGate(gate: Gate, color: number): void {
@@ -314,6 +372,11 @@ export class RaceManager {
   private cleanup(): void {
     for (const gate of this.gates) this.raceGroup.remove(gate.group);
     this.gates = [];
+    if (this.raceLine) {
+      this.raceGroup.remove(this.raceLine.mesh);
+      this.raceLine.dispose();
+      this.raceLine = null;
+    }
     if (this.rival) {
       this.raceGroup.remove(this.rival.model.group);
       this.rival = null;
