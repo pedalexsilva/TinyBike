@@ -53,7 +53,7 @@ export class Sky {
       uniforms: {
         uTop: { value: new THREE.Color('#2f7fd6') },
         uMid: { value: new THREE.Color('#62b4ff') },
-        uBottom: { value: new THREE.Color('#dff0ff') },
+        uBottom: { value: new THREE.Color('#aed2f5') },
         uSunDir: { value: SUN_DIR },
       },
       side: THREE.BackSide,
