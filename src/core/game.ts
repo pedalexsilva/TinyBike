@@ -68,8 +68,9 @@ export class Game {
   private readonly challenge: ChallengePanel;
   private readonly raceHud: RaceHud;
   private readonly race: RaceManager;
-  /** Re-armed when the player leaves the challenge radius. */
-  private challengeArmed = true;
+  /** Re-armed when the player leaves the challenge radius. Starts disarmed so
+   * the panel never auto-opens on the first frames at spawn. */
+  private challengeArmed = false;
   /** Tracks player.crashed transitions to clear the bike tumble pose. */
   private wasCrashed = false;
   private paused = true; // start paused for title screen
@@ -329,11 +330,38 @@ export class Game {
       }
     });
 
+    this.placeStartAwayFromRivals();
     this.syncBikeTransform();
     this.followCam.snap(this.player);
 
     window.addEventListener('resize', () => this.onResize());
     gameStore.subscribe((s) => this.followCam.setReduceShake(s.reduceShake));
+  }
+
+  /**
+   * Nudge the spawn to the first road stretch that is clear of every rival,
+   * so the player never enters the planet right next to a cyclist (which would
+   * instantly pop the "!" balloon / challenge panel). 28m > NOTICE_RADIUS (20m).
+   */
+  private placeStartAwayFromRivals(): void {
+    const SAFE_START_CLEARANCE = 28; // meters
+    const samples = this.planet.road.samples;
+    for (let i = 0; i < samples.length; i++) {
+      const s = samples[i];
+      let nearest = Infinity;
+      for (const npc of this.rivals.npcs) {
+        const d = s.position.distanceTo(npc.position);
+        if (d < nearest) nearest = d;
+      }
+      if (nearest >= SAFE_START_CLEARANCE) {
+        this.player.resetTo(
+          s.position.clone().addScaledVector(s.dir, 0.5),
+          s.tangent,
+        );
+        return;
+      }
+    }
+    // No fully-clear sample found — keep the constructor's default spawn.
   }
 
   private startRace(def: RivalDef): void {
