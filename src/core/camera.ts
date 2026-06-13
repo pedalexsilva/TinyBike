@@ -58,8 +58,15 @@ export class FollowCamera {
     this.camera.position.lerp(_desired, t);
 
     // Damped up vector (keeps the horizon stable across the sphere).
-    const upT = 1 - Math.exp(-C.upDamping * dt);
-    this.camera.up.lerp(player.up, upT).normalize();
+    // If the inherited up is pointing the wrong way (e.g. left over from a
+    // cutscene/orbit transition), snap instead of lerping through the zero
+    // vector — that midpoint would briefly flip the image upside down.
+    if (this.camera.up.dot(player.up) < 0) {
+      this.camera.up.copy(player.up);
+    } else {
+      const upT = 1 - Math.exp(-C.upDamping * dt);
+      this.camera.up.lerp(player.up, upT).normalize();
+    }
 
     // FOV: speed sensation + boost kick.
     const speedRatio = player.speed / CONFIG.player.maxSpeed;
