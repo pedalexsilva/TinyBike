@@ -48,6 +48,8 @@ export class Player {
   /** True while the rider is down after a crash — input is ignored. */
   crashed = false;
   crashTimer = 0;
+  /** Seconds of crash immunity after getting back up (prevents crash loops). */
+  crashGrace = 0;
   /** True only on the frame a crash was triggered (for FX/camera kicks). */
   justCrashed = false;
 
@@ -81,6 +83,7 @@ export class Player {
     this.slipstream = false;
     this.crashed = false;
     this.crashTimer = 0;
+    this.crashGrace = 0;
   }
 
   get boosting(): boolean {
@@ -107,7 +110,7 @@ export class Player {
 
   /** Called by the game on collision with a barrier, the support car, or a pavé bonk. */
   crash(): void {
-    if (this.crashed) return;
+    if (this.crashed || this.crashGrace > 0) return;
     this.crashed = true;
     this.justCrashed = true;
     this.crashTimer = CONFIG.crash.duration;
@@ -116,12 +119,31 @@ export class Player {
     this.combo = 0;
   }
 
+  /**
+   * Get back on the bike after a fall: snapped to a safe spot (passed in by
+   * the game — the road centerline, inside any barriers) facing along the
+   * route, with a brief immunity window and enough hydration to leave the
+   * bonk state so the same hazard can't immediately knock the rider down.
+   */
+  recoverCrash(position: THREE.Vector3, forward: THREE.Vector3): void {
+    this.position.copy(position);
+    this.up.copy(position).normalize();
+    this.heading.copy(forward);
+    projectOnTangentPlane(this.heading, this.up, this.heading).normalize();
+    orientToSurface(this.quaternion, this.up, this.heading);
+    this.speed = 0;
+    this.crashGrace = CONFIG.crash.graceDuration;
+    this.hydration = Math.max(this.hydration, CONFIG.crash.recoverHydration);
+    this.bonk = false;
+  }
+
   update(dt: number, input: InputFrame): void {
     const C = CONFIG.player;
     const B = CONFIG.boost;
     const H = CONFIG.hydration;
 
     this.justCrashed = false;
+    if (this.crashGrace > 0) this.crashGrace = Math.max(0, this.crashGrace - dt);
 
     // --- Crash recovery: input is ignored until the timer runs out ---
     if (this.crashed) {

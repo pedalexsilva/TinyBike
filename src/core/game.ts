@@ -398,8 +398,11 @@ export class Game {
       this.checkFinishStraight();
     }
 
-    // Clear the bike's tumble pose once the crash timer runs out.
-    if (this.wasCrashed && !this.player.crashed) this.bike.setCrashed(false);
+    // Once the tumble ends, stand the rider back up in a safe spot.
+    if (this.wasCrashed && !this.player.crashed) {
+      this.bike.setCrashed(false);
+      this.recoverFromCrash();
+    }
     this.wasCrashed = this.player.crashed;
 
     // Audio updates
@@ -492,6 +495,20 @@ export class Game {
     this.player.crash();
     this.bike.setCrashed(true);
     this.audio.playCrash();
+  }
+
+  /**
+   * Stand the rider back up after a fall on the road centerline (inside any
+   * barriers) facing along the route. Combined with the recovery grace window
+   * and hydration top-up in Player.recoverCrash, this prevents the same hazard
+   * — a clipped barrier or a pavé bonk — from instantly re-triggering a fall.
+   */
+  private recoverFromCrash(): void {
+    const road = this.planet.road;
+    _playerDir.copy(this.player.position).normalize();
+    const s = road.samples[road.closestIndex(_playerDir)];
+    _sideVec.copy(s.position).addScaledVector(s.dir, CONFIG.road.lift);
+    this.player.recoverCrash(_sideVec, s.tangent);
   }
 
   /** Support car collision (crash) and slipstream draft. */
