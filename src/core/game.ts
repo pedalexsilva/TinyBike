@@ -26,6 +26,7 @@ import { TrailFX } from '../fx/trail';
 import { DustFX } from '../fx/dust';
 import { SpeedLinesFX } from '../fx/speedlines';
 import { Hud } from '../ui/hud';
+import { Minimap } from '../ui/minimap';
 import { ChallengePanel } from '../ui/challenge';
 import { RaceHud } from '../ui/race-hud';
 import { RaceManager } from '../race/race';
@@ -77,6 +78,7 @@ export class Game {
   private readonly dust = new DustFX();
   private readonly speedLines: SpeedLinesFX;
   private readonly hud: Hud;
+  private readonly minimap: Minimap;
   private readonly sectorBanner: SectorBanner;
   private currentSector: SectorId | null = null;
   private postFX: PostFX | null = null;
@@ -164,6 +166,7 @@ export class Game {
 
     // --- HUD ---
     this.hud = new Hud(root, this.input);
+    this.minimap = new Minimap(root, this.planet, this.rivals);
     this.challenge = new ChallengePanel(root);
     this.raceHud = new RaceHud(root);
     this.race = new RaceManager(this.planet, this.scene);
@@ -438,6 +441,11 @@ export class Game {
     this.sky.update(dt, this.followCam.camera.position);
 
     this.hud.update(dt, this.player.speed, this.player.boostCharge, this.player.boosting);
+
+    // Rival radar: only while freely exploring (hidden in races, garage,
+    // pause, title and the challenge panel).
+    this.minimap.setVisible(!this.paused && this.race.state === 'idle' && !this.garage.isOpen);
+    this.minimap.update(dt, this.player);
   }
 
   private syncBikeTransform(): void {

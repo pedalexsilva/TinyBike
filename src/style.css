@@ -428,6 +428,90 @@ body.touch .desktop-only {
   transform: translateY(1px);
 }
 
+/* ---------- Rival radar / minimap (P08.5) ---------- */
+#minimap {
+  position: fixed;
+  top: 64px;
+  right: 14px;
+  width: 104px;
+  height: 104px;
+  pointer-events: auto;
+  z-index: 4;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+  transition: width 0.18s ease, height 0.18s ease;
+}
+#minimap.expanded {
+  width: 220px;
+  height: 220px;
+}
+#minimap.hidden {
+  display: none;
+}
+#minimap-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#minimap-tip {
+  position: fixed;
+  z-index: 5;
+  width: min(220px, 60vw);
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--ink);
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+#minimap-tip.hidden {
+  display: none;
+}
+#minimap-tip h4 {
+  margin: 0 0 4px;
+  font-family: var(--display-font);
+  font-size: 18px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.5px;
+  -webkit-text-stroke: 0.5px var(--ink);
+}
+#minimap-tip p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.85;
+}
+.minimap-tip-type {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: var(--tour-yellow);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 2px 8px;
+}
+.minimap-tip-beaten {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--pt-green);
+}
+
+/* Nudge the radar below the topbar action buttons on small screens. */
+@media (max-width: 560px) {
+  #minimap {
+    width: 88px;
+    height: 88px;
+    top: 58px;
+  }
+}
+
 /* ---------- Title Screen (vintage cycling poster) ---------- */
 #title-screen {
   position: fixed;
