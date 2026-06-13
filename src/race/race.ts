@@ -85,6 +85,11 @@ export class RaceManager {
     return this.playerMeters >= (this.rival?.progress ?? 0);
   }
 
+  /** World position of the rival's bike (for the celebration camera), or null. */
+  get rivalCelebrationCenter(): THREE.Vector3 | null {
+    return this.rival ? this.rival.model.group.position.clone() : null;
+  }
+
   // ----------------------------------------------------------- LIFECYCLE
 
   start(
