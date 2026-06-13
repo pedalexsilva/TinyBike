@@ -24,3 +24,7 @@ export const ZONES: Record<string, Zone> = Object.fromEntries(
 );
 
 export const ROAD_CONTROL_LATLON = TOUR_DEF.roadControlLatLon;
+
+export const SECTORS = TOUR_DEF.sectors;
+export { sectorForDir, sectorForLon } from './planet-def';
+export type { SectorDef, SectorId } from './planet-def';

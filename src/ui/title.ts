@@ -16,10 +16,14 @@ export class TitleScreen {
       'beforeend',
       `
       <div id="title-screen">
-        <div id="title-content">
-          <h1 id="title-logo">TINY<br>PELOTON</h1>
-          <p id="title-sub">Three tiny planets. Ten legendary rivals. One bike.</p>
-          <button id="title-begin">BEGIN</button>
+        <div id="title-poster">
+          <div id="title-content">
+            <div id="title-eyebrow">★ GRAND TOUR ★</div>
+            <h1 id="title-logo">TINY<br>PELOTON</h1>
+            <div id="title-flags"><span>🇫🇷</span><span>🇮🇹</span><span>🇵🇹</span></div>
+            <p id="title-sub">One planet. Three Grand Tours.<br>France · Italia · Portugal.</p>
+            <button id="title-begin">BEGIN</button>
+          </div>
         </div>
       </div>`,
     );

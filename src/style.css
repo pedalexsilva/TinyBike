@@ -1,7 +1,16 @@
 :root {
   --tour-yellow: #ffd23f;
   --ink: #1c1f2e;
+  --cream: #fdf6e6;
+  --paper: #fffdf6;
+  /* National accents (FR blue / IT maglia-rosa / PT green). */
+  --fr-blue: #2b5fbf;
+  --it-pink: #e0407a;
+  --pt-green: #16793f;
   --hud-font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* Condensed display face for the poster/sport identity (system stack, no
+     network needed). */
+  --display-font: 'Arial Narrow', 'Helvetica Neue', 'Segoe UI', Impact, system-ui, sans-serif;
 }
 
 * {
@@ -58,15 +67,26 @@ body {
 }
 
 #speed {
-  font-size: 34px;
-  font-weight: 800;
+  font-family: var(--display-font);
+  font-size: 40px;
+  font-weight: 900;
   font-style: italic;
-  text-shadow: 0 2px 0 rgba(28, 31, 46, 0.45);
+  line-height: 1;
+  letter-spacing: 1px;
+  padding: 6px 16px;
+  border-radius: 14px;
+  background: rgba(20, 24, 48, 0.45);
+  backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 2px 0 rgba(28, 31, 46, 0.5);
 }
 #speed span {
-  font-size: 15px;
-  font-weight: 600;
-  opacity: 0.85;
+  font-family: var(--hud-font);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  opacity: 0.8;
 }
 
 #fps {
@@ -77,30 +97,36 @@ body {
 
 #boost-bar {
   position: absolute;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  bottom: max(20px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: min(280px, 46vw);
-  height: 18px;
-  border-radius: 10px;
-  background: rgba(28, 31, 46, 0.55);
-  border: 2px solid rgba(255, 255, 255, 0.65);
+  width: min(320px, 52vw);
+  height: 22px;
+  border-radius: 12px;
+  background: rgba(28, 31, 46, 0.6);
+  border: 2.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
 
 #boost-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #ff9f1c, var(--tour-yellow));
+  background: linear-gradient(90deg, #f1c40f, #ff9f1c 60%, #ff6a00);
   transition: width 80ms linear;
 }
 
 #boost-bar.ready {
   border-color: var(--tour-yellow);
-  box-shadow: 0 0 14px rgba(255, 210, 63, 0.8);
+  box-shadow: 0 0 18px rgba(255, 210, 63, 0.85);
+  animation: boost-ready-pulse 1s ease-in-out infinite;
+}
+@keyframes boost-ready-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(255, 210, 63, 0.6); }
+  50% { box-shadow: 0 0 22px rgba(255, 210, 63, 0.95); }
 }
 #boost-bar.boosting #boost-fill {
-  background: #ff5722;
+  background: linear-gradient(90deg, #ff5722, #ff8a3d);
 }
 
 #boost-label {
@@ -109,10 +135,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 #hint {
@@ -230,9 +257,12 @@ body.touch .desktop-only {
   border-radius: 14px;
 }
 #challenge-info h2 {
-  font-size: 20px;
-  font-weight: 800;
+  font-family: var(--display-font);
+  font-size: 24px;
+  font-weight: 900;
   font-style: italic;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 #challenge-info p {
   font-size: 13px;
@@ -327,7 +357,7 @@ body.touch .desktop-only {
   border-radius: 18px; padding: 22px; color: var(--ink); text-align: center;
   box-shadow: 0 12px 0 rgba(28,31,46,0.35); animation: challenge-pop 180ms ease-out;
 }
-#results-title { font-size: 30px; font-weight: 900; font-style: italic; color: #2ecc71; }
+#results-title { font-family: var(--display-font); font-size: 38px; font-weight: 900; font-style: italic; letter-spacing: 1px; text-transform: uppercase; color: #2ecc71; }
 #results-title.lose { color: #e84545; }
 #results-card p { margin-top: 8px; font-size: 14px; }
 #results-time { font-weight: 700; }
@@ -398,11 +428,12 @@ body.touch .desktop-only {
   transform: translateY(1px);
 }
 
-/* ---------- Title Screen ---------- */
+/* ---------- Title Screen (vintage cycling poster) ---------- */
 #title-screen {
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at center, #2980b9, #1c1f2e);
+  background:
+    radial-gradient(circle at 50% 30%, #3a7bd5 0%, #1f3a73 55%, #14182e 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -420,36 +451,77 @@ body.touch .desktop-only {
   display: none;
 }
 
-#title-content {
+/* The poster card: cream paper with an ink frame and a sun-ray backdrop. */
+#title-poster {
+  position: relative;
+  width: min(440px, 90vw);
+  padding: 40px 28px 34px;
   text-align: center;
-  color: #fff;
-  max-width: 480px;
-  padding: 24px;
-  animation: title-entrance 1s cubic-bezier(0.19, 1, 0.22, 1);
+  color: var(--ink);
+  background:
+    repeating-conic-gradient(from 0deg at 50% 38%,
+      rgba(255, 210, 63, 0.16) 0deg 12deg, rgba(255, 255, 255, 0) 12deg 24deg),
+    var(--cream);
+  border: 4px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 0 18px 0 rgba(0, 0, 0, 0.35), 0 30px 60px rgba(0, 0, 0, 0.45);
+  animation: title-entrance 0.9s cubic-bezier(0.19, 1, 0.22, 1);
+  overflow: hidden;
+}
+/* National stripe along the top of the poster. */
+#title-poster::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 8px;
+  background: linear-gradient(90deg,
+    var(--fr-blue) 0 33.3%, var(--it-pink) 33.3% 66.6%, var(--pt-green) 66.6% 100%);
 }
 
+#title-content { position: relative; }
+
 @keyframes title-entrance {
-  from { transform: translateY(30px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(30px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+#title-eyebrow {
+  font-family: var(--display-font);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: #b8862b;
+  margin-bottom: 6px;
 }
 
 #title-logo {
-  font-size: 72px;
+  font-family: var(--display-font);
+  font-size: 84px;
   font-weight: 900;
   font-style: italic;
-  line-height: 0.9;
-  letter-spacing: -2px;
+  line-height: 0.84;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   color: var(--tour-yellow);
-  text-shadow: 0 4px 0 var(--ink), 0 8px 24px rgba(0,0,0,0.3);
-  margin-bottom: 16px;
+  -webkit-text-stroke: 3px var(--ink);
+  text-shadow: 4px 5px 0 var(--ink);
+  margin-bottom: 14px;
+}
+
+#title-flags {
+  font-size: 26px;
+  letter-spacing: 8px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.2));
 }
 
 #title-sub {
   font-size: 16px;
+  line-height: 1.45;
   opacity: 0.85;
-  margin-bottom: 32px;
-  font-weight: 500;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  margin-bottom: 28px;
+  font-weight: 600;
 }
 
 #title-begin {
@@ -457,10 +529,13 @@ body.touch .desktop-only {
   color: var(--ink);
   border: 3px solid var(--ink);
   border-radius: 16px;
-  padding: 16px 48px;
-  font-size: 22px;
+  padding: 16px 52px;
+  font-family: var(--display-font);
+  font-size: 26px;
   font-weight: 900;
-  letter-spacing: 1px;
+  font-style: italic;
+  letter-spacing: 3px;
+  text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 8px 0 var(--ink);
   transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -474,6 +549,52 @@ body.touch .desktop-only {
 #title-begin:active {
   transform: translateY(4px);
   box-shadow: 0 4px 0 var(--ink);
+}
+
+/* ---------- Sector banner ---------- */
+#sector-banner {
+  --accent: var(--tour-yellow);
+  position: fixed;
+  top: 22%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 28px 12px 20px;
+  background: var(--ink);
+  border-left: 8px solid var(--accent);
+  border-radius: 0 14px 14px 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  z-index: 60;
+  pointer-events: none;
+  transform: translateX(-110%);
+}
+#sector-banner.hidden { display: none; }
+#sector-banner.sector-show { animation: sector-sweep 2.6s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
+@keyframes sector-sweep {
+  0% { transform: translateX(-110%); }
+  14% { transform: translateX(0); }
+  86% { transform: translateX(0); }
+  100% { transform: translateX(-110%); }
+}
+#sector-flag { font-size: 38px; line-height: 1; }
+#sector-text { display: flex; flex-direction: column; }
+#sector-name {
+  font-family: var(--display-font);
+  font-size: 32px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 2px;
+  line-height: 1;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+#sector-tour {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  opacity: 0.85;
 }
 
 /* ---------- Onboarding Hints ---------- */
@@ -539,12 +660,14 @@ body.touch .desktop-only {
 }
 
 #pause-card h2 {
-  font-size: 28px;
+  font-family: var(--display-font);
+  font-size: 32px;
   font-weight: 900;
   font-style: italic;
   text-align: center;
   margin-bottom: 20px;
-  letter-spacing: -0.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
 .pause-section {
@@ -671,10 +794,12 @@ body.touch .desktop-only {
 }
 
 #garage-header h2 {
-  font-size: 22px;
+  font-family: var(--display-font);
+  font-size: 26px;
   font-weight: 900;
   font-style: italic;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   color: var(--tour-yellow);
 }
 
