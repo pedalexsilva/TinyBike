@@ -178,6 +178,27 @@ CRITÉRIOS: densidade visual alta sem cair de 60fps (medir com stats); planeta s
 CRITÉRIOS: encontrar e falar com os 4 rivais do Tour funciona; cada rival é visualmente distinto e cómico.
 ```
 
+### P08.5 — Radar de rivais + minimapa do planeta
+```
+[CONTEXTO GLOBAL]
+
+Referência visual para encontrar rivais (decisão de design):
+- Minimapa circular sempre visível num canto do HUD (não câmara extra — projeção 2D barata: lat/lon de cada entidade → ponto num disco, com o "norte" do disco fixo ao eixo polar do planeta, igual em todos os planetas).
+- Bússola/seta discreta perto do minimapa, sempre a apontar para o rival não derrotado mais próximo na zona atual, com distância aproximada (perto/médio/longe — sem números exatos, mantém o tom arcade).
+- Toque/clique no minimapa expande-o (overlay maior, não pausa o jogo); toque num pin mostra nome + bio curta do rival (mesmo painel visual do challenge, em modo "preview").
+
+Implementação:
+1. src/ui/minimap.ts: canvas 2D (~96px, expande para ~220px ao tocar) desenhado a cada poucos frames (não todos os frames — performance). Projeta:
+   - jogador: marcador central fixo, disco roda para refletir o heading do jogador (rotação do canvas), ou fica fixo com "norte" sempre para cima (mais calmo — preferir esta opção para v1).
+   - rivais da zona/planeta atual: pins coloridos com a cor da jersey/look de cada um; rivais já derrotados ficam acinzentados com um ✓.
+   - musettes/checkpoints opcional (fase 2, só se sobrar tempo).
+2. src/ui/compass.ts (ou integrado no minimap): pequena seta/triângulo junto ao minimapa, calcula o bearing esférico (great-circle) do jogador até ao rival não derrotado mais próximo via funções já existentes em src/core/spherical.ts; rotaciona a seta para esse bearing relativo ao heading do jogador. Pulsa/brilha quando o rival entra no NOTICE_RADIUS (P08).
+3. Dados: usa RIVALS (idleLatLon, look, planet, zone) + estado de "rivais derrotados" do Zustand store (preparar já o campo, mesmo que a persistência completa só chegue em P12).
+4. Estilo: moldura circular cel-shaded a condizer com o HUD existente (ver src/style.css), ícones simples (círculos coloridos bastam — nada de fotos).
+5. Performance: nada de render targets/câmaras extra; atualização do desenho do minimapa a ~6-10fps é suficiente (o resto do jogo continua a 60fps).
+CRITÉRIOS: em qualquer ponto do planeta é possível, sem parar de pedalar, ver no minimapa onde estão os rivais da zona e seguir a seta da bússola até ao mais próximo ainda não desafiado; minimapa expandido mostra bio ao tocar num pin sem pausar o jogo.
+```
+
 ---
 
 ## FASE 3 — CORRIDAS
