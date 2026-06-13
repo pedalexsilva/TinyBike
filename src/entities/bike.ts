@@ -68,6 +68,10 @@ export class BikeModel {
   private celebrating = false;
   private cel = 0;
   private celTime = 0;
+  /** Crash tumble: true while the rider is down. */
+  private crashing = false;
+  private crashTime = 0;
+  private crashSide = 1;
   /** Rear-wheel ground contact in world space (for trail/dust FX). */
   readonly rearContact = new THREE.Vector3();
 
@@ -257,8 +261,32 @@ export class BikeModel {
     if (!on) this.celTime = 0;
   }
 
+  /** Trigger (or clear) the crash tumble — bike+rider topple to one side. */
+  setCrashed(on: boolean): void {
+    this.crashing = on;
+    if (on) {
+      this.crashTime = 0;
+      this.crashSide = Math.random() < 0.5 ? -1 : 1;
+    } else {
+      this.leanPivot.position.set(0, 0, 0);
+      this.leanPivot.rotation.set(0, 0, 0);
+      this.leanPivot.scale.set(1, 1, 1);
+    }
+  }
+
   update(dt: number, speed: number, smoothSteer: number, justBoosted: boolean): void {
     const B = CONFIG.bike;
+
+    // Crash tumble: topple onto one side and stay down until cleared.
+    if (this.crashing) {
+      this.crashTime += dt;
+      const fall = Math.min(1, this.crashTime / 0.3);
+      const settle = Math.sin(this.crashTime * 12) * 0.05 * (1 - fall);
+      this.leanPivot.rotation.set(0, 0, (Math.PI / 2) * fall * this.crashSide + settle);
+      this.leanPivot.position.set(0, -0.32 * fall, 0);
+      this.leanPivot.scale.set(1, 1, 1);
+      return;
+    }
 
     // Victory celebration blend (0 = riding, 1 = arms-up salute).
     this.cel += ((this.celebrating ? 1 : 0) - this.cel) * (1 - Math.exp(-5 * dt));

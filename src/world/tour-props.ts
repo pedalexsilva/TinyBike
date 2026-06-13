@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../core/config';
 import { toonMat, addOutline } from '../render/toon';
 import { ZONES, angularDistance, dirFromLatLon } from './zones';
+import { buildFinishStraight } from './finish-straight';
 import type { Planet } from './planet';
 
 const _pos = new THREE.Vector3();
@@ -47,6 +48,7 @@ export class TourProps {
     this.buildSunflowers(planet);
     this.buildPavePoplars(planet);
     this.buildFinishArch(planet);
+    this.group.add(buildFinishStraight(planet));
   }
 
   update(dt: number): void {
